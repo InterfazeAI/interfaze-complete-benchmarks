@@ -73,8 +73,11 @@ else
   echo "  [skip] asr: set TARGET=<name> (python -m bench_core list-targets)"
 fi
 
-run_step spider2 uv run -m benchmarks.spider2_lite.spider2_lite \
-  --provider "$PROVIDER" --model "$MODEL"
+if [ -n "${TARGET:-}" ]; then
+  run_step spider2 uv run python -m bench_core run --benchmark spider2 --target "$TARGET"
+else
+  echo "  [skip] spider2: set TARGET=<name> (python -m bench_core list-targets)"
+fi
 
 if [ -n "${TARGET:-}" ]; then
   R="$([ "$REASONING" = "high" ] && echo high || echo off)"

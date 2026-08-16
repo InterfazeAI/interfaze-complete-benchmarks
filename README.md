@@ -115,7 +115,7 @@ uv run python -m bench_core run --target inkling --benchmark mmmu_pro --variant 
 uv run python -m bench_core run --target inkling --benchmark mmmu_pro --variant vision
 uv run python -m bench_core run --target inkling --benchmark refcoco --variant val
 uv run python -m bench_core run --target inkling --benchmark asr
-uv run -m benchmarks.spider2_lite.spider2_lite --provider fireworks
+uv run python -m bench_core run --target inkling --benchmark spider2
 ```
 
 Two caveats when reading Fireworks numbers:
@@ -258,11 +258,9 @@ Text-to-SQL with execution-accuracy scoring against per-example SQLite databases
 
 ```bash
 # One-time setup: clone Spider2 + download SQLite databases
-uv run -m benchmarks.spider2_lite.fetch_data
+uv run -m benchmarks.spider2_lite.fetch_data   # downloads the ~4GB data/ (required)
 
-# Run
-uv run -m benchmarks.spider2_lite.spider2_lite
-uv run -m benchmarks.spider2_lite.spider2_lite --provider fireworks
-uv run -m benchmarks.spider2_lite.spider2_lite --predict-only
-uv run -m benchmarks.spider2_lite.spider2_lite --evaluate-only
+# Run any target (execution accuracy over the 135 local SQLite instances)
+uv run python -m bench_core run --target gpt-5.5 --benchmark spider2
+uv run python -m bench_core run --target inkling --benchmark spider2
 ```

@@ -25,6 +25,7 @@ BENCHMARKS = {
     "refcoco": "benchmarks.obj_detection.bench",
     "ocrbench_v2": "benchmarks.ocrbench_v2.bench",
     "olmocr": "benchmarks.olmocr.harness",
+    "spider2": "benchmarks.spider2_lite.bench",
 }
 
 
