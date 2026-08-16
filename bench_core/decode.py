@@ -1,4 +1,4 @@
-"""Normalize a host response into `Response` (unifies the three shapes)."""
+# Normalize a host response into `Response` (unifies the three shapes).
 
 from __future__ import annotations
 

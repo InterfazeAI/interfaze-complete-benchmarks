@@ -1,5 +1,3 @@
-"""Classify a provider exception into the signal the fallback ladder acts on."""
-
 from __future__ import annotations
 
 import re
@@ -9,9 +7,9 @@ from enum import Enum
 
 class ErrorKind(str, Enum):
     PARAM_REJECTED = (
-        "param_rejected"  # a param the model won't accept -> adjust + retry
+        "param_rejected"
     )
-    RATE_LIMITED = "rate_limited"  # 429 -> backoff + retry
+    RATE_LIMITED = "rate_limited"
     TRANSIENT = "transient"  # timeout / 5xx / connection -> backoff + retry
     EMPTY_CONTENT = "empty_content"  # returned nothing usable -> retry
     FATAL = "fatal"  # auth / missing model / unrecognized 4xx -> fail the sample

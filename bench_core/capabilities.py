@@ -1,4 +1,4 @@
-"""Declared model capabilities + the merge that resolves them."""
+# Declared model capabilities + the merge that resolves them.
 
 from __future__ import annotations
 

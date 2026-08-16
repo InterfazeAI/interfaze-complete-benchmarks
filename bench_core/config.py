@@ -1,5 +1,3 @@
-"""Targets + provider registry + the capability merge chain."""
-
 from __future__ import annotations
 
 import os
@@ -15,7 +13,6 @@ from bench_core.providers.gemini import GeminiAdapter
 from bench_core.providers.openai_compat import OpenAICompatAdapter
 
 # --- provider registry ----------------------------------------------------
-
 
 @dataclass
 class ProviderSpec:
@@ -130,8 +127,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
 }
 
 
-# --- targets ---------------------------------------------------------------
-
+# targets
 
 @dataclass
 class Target:

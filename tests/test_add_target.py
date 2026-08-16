@@ -72,3 +72,22 @@ def test_changed_targets_detects_added_and_modified(tmp_path):
 
     new.write_text("targets:\n  a:\n    provider: openai\n    model_id: x\n")
     assert changed_targets(str(old), str(new)) == ["a"]  # modified entry
+
+
+def test_changed_targets_empty_baseline_runs_nothing(tmp_path):
+    # first push / force-push / no old file -> don't benchmark the whole registry
+    new = tmp_path / "new.yaml"
+    new.write_text("targets:\n  a:\n    provider: fireworks\n    model_id: x\n")
+    assert changed_targets(None, str(new)) == []
+    assert changed_targets(str(tmp_path / "missing.yaml"), str(new)) == []
+
+
+def test_changed_targets_ignores_ci_regression_flip(tmp_path):
+    # toggling ci_regression must NOT trigger a (paid) benchmark — model unchanged
+    old = tmp_path / "old.yaml"
+    new = tmp_path / "new.yaml"
+    old.write_text("targets:\n  a:\n    provider: fireworks\n    model_id: x\n")
+    new.write_text(
+        "targets:\n  a:\n    provider: fireworks\n    model_id: x\n    ci_regression: true\n"
+    )
+    assert changed_targets(str(old), str(new)) == []

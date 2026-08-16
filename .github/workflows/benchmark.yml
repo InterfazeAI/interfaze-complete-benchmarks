@@ -16,10 +16,16 @@ on:
         description: "reasoning override: off|low|medium|high (blank = benchmark default)"
         default: ""
   schedule:
-    - cron: "0 6 * * *" # nightly plumbing health check
+    - cron: "0 6 * * 1" # weekly (Mon) plumbing health check — only ci_regression targets
   push:
     branches: [main]
     paths: [bench_core/targets.yaml] # a merged target change runs a full benchmark for it
+
+# never run two paid benchmark passes for the same ref at once (queue, don't cancel
+# — a half-finished expensive run's spend shouldn't be thrown away)
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -98,7 +104,8 @@ jobs:
 
   report:
     needs: [plan, run]
-    if: always()
+    # only when something actually ran; skip the runner entirely on a no-op push
+    if: always() && needs.plan.outputs.has_work == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

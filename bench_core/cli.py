@@ -1,5 +1,3 @@
-"""bench CLI: run a benchmark against a target, or list targets."""
-
 from __future__ import annotations
 
 import argparse

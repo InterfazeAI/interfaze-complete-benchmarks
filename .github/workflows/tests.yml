@@ -1,12 +1,14 @@
 name: tests
 
-# The free, fast gate on every push/PR: the offline bench_core suite + target
-# validation (test_targets.py loads/validates every bench_core/targets.yaml entry,
-# so adding a model is checked here). No secrets, no API calls.
-
 on:
   push:
+    branches: [main] # post-merge sanity; feature branches are covered by their PR
   pull_request:
+
+# supersede stale runs on the same ref instead of piling them up
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
