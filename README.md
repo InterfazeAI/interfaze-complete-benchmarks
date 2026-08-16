@@ -113,7 +113,7 @@ uv run python -m bench_core run --target inkling --benchmark gpqa
 uv run python -m bench_core run --target inkling --benchmark mmmlu
 uv run python -m bench_core run --target inkling --benchmark mmmu_pro --variant standard
 uv run python -m bench_core run --target inkling --benchmark mmmu_pro --variant vision
-uv run -m benchmarks.obj_detection.refcoco_multi --provider fireworks --model accounts/fireworks/models/inkling
+uv run python -m bench_core run --target inkling --benchmark refcoco --variant val
 uv run python -m bench_core run --target inkling --benchmark asr
 uv run -m benchmarks.spider2_lite.spider2_lite --provider fireworks
 ```
@@ -190,21 +190,14 @@ Links: [RefCOCO/RefCOCO+ paper](https://arxiv.org/abs/1608.00272) · [RefCOCOg p
 Metric: Acc@IoU=0.5 on the referring-expression bounding box.
 
 ```bash
-# Interfaze (RefCOCO val by default)
-uv run -m benchmarks.obj_detection.refcoco
-uv run -m benchmarks.obj_detection.refcoco --split testA
-uv run -m benchmarks.obj_detection.refcoco --dataset lmms-lab/RefCOCO+ --split testB
+# Any target; --variant is the split (val | testA | testB | test). Metrics include
+# a strict Acc@0.5 plus a format-tolerant `oracle` upper bound (submetrics.oracle).
+uv run python -m bench_core run --target gpt-5.5          --benchmark refcoco --variant val
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark refcoco --variant testA
+uv run python -m bench_core run --target inkling          --benchmark refcoco --variant val
 
-# Any provider via the multi runner
-uv run -m benchmarks.obj_detection.refcoco_multi --provider openai    --model gpt-5.4
-uv run -m benchmarks.obj_detection.refcoco_multi --provider anthropic --model claude-sonnet-4-6
-uv run -m benchmarks.obj_detection.refcoco_multi --provider gemini    --model gemini-3-flash-preview
-
-# JigsawStack object_detection API (instead of a VLM)
+# JigsawStack object_detection API (a bespoke endpoint, not a chat model)
 uv run -m benchmarks.obj_detection.ob_det_api
-
-# Evaluate only
-uv run -m benchmarks.obj_detection.refcoco --evaluate-only
 ```
 
 ---

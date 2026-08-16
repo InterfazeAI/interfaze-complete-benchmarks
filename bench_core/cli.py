@@ -21,6 +21,7 @@ BENCHMARKS = {
     "asr": "benchmarks.asr.bench",
     "mmmlu": "benchmarks.mmmlu.bench",
     "mmmu_pro": "benchmarks.mmmu_pro.bench",
+    "refcoco": "benchmarks.obj_detection.bench",
 }
 
 

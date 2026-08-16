@@ -86,8 +86,12 @@ else
   echo "  [skip] mmmupro: set TARGET=<name> (python -m bench_core list-targets)"
 fi
 
-run_step refcoco uv run -m benchmarks.obj_detection.refcoco_multi \
-  --provider "$PROVIDER" --model "$MODEL" --split "$REFCOCO_SPLIT"
+if [ -n "${TARGET:-}" ]; then
+  run_step refcoco uv run python -m bench_core run --benchmark refcoco \
+    --target "$TARGET" --variant "$REFCOCO_SPLIT"
+else
+  echo "  [skip] refcoco: set TARGET=<name> (python -m bench_core list-targets)"
+fi
 
 run_step olmocr uv run -m benchmarks.olmocr.olmocr_bench_fireworks --model "$MODEL"
 
@@ -111,8 +115,7 @@ else
   echo "  [skip] gpqa: set TARGET=<name> (python -m bench_core list-targets)"
 fi
 
-# Grounding is scored strictly above; this adds the repo's uniform
-# format-tolerant oracle pass (upper bound) for every RefCOCO run present.
-run_step refcoco_oracle uv run -m benchmarks.obj_detection.reeval_format_tolerant
+# The format-tolerant oracle (upper bound) is now computed inline by the refcoco
+# run and stored under submetrics.oracle in its metrics.json — no separate step.
 
 echo "=== [$(date +%H:%M:%S)] suite finished for $MODEL"
