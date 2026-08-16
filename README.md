@@ -23,9 +23,11 @@ FIREWORKS_API_KEY=...
 JIGSAWSTACK_API_KEY=...   # only for benchmarks/obj_detection/ob_det_api.py
 ```
 
-Every runner accepts `--limit N` for a smoke test and `--evaluate-only` /
-`--predict-only` to split prediction and scoring. Re-running a benchmark
-resumes from its checkpoint file — already-completed samples are skipped.
+Benchmarks run through one CLI: `uv run python -m bench_core run --target <name>
+--benchmark <name>` (see `python -m bench_core list-targets`). `--sample N` is a
+smoke test; re-running resumes from the per-run checkpoint (completed samples are
+skipped). The remaining bespoke runners (`ob_det_api`, `olmocr_bench_reducto`,
+BFCL) keep their own `--limit`/`--evaluate-only` flags.
 
 Two extra setup steps for specific benchmarks:
 
@@ -143,9 +145,6 @@ Links: [paper](https://arxiv.org/abs/2501.00321) · [repo](https://github.com/Yu
 uv run python -m bench_core run --target gpt-5.5          --benchmark ocrbench_v2
 uv run python -m bench_core run --target gemini-3.7-flash --benchmark ocrbench_v2
 uv run python -m bench_core run --target inkling          --benchmark ocrbench_v2
-
-# Evaluate without re-running predictions
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2 --evaluate-only
 ```
 
 ---
@@ -264,3 +263,28 @@ uv run -m benchmarks.spider2_lite.fetch_data   # downloads the ~4GB data/ (requi
 uv run python -m bench_core run --target gpt-5.5 --benchmark spider2
 uv run python -m bench_core run --target inkling --benchmark spider2
 ```
+
+## Automation (GitHub Actions)
+
+Two workflows under `.github/workflows/`:
+
+- **`tests.yml`** — the free gate on every push/PR: the offline `bench_core` suite
+  + lint. `test_targets.py` validates every `bench_core/targets.yaml` entry, so a
+  new model is checked here before it ever runs.
+- **`benchmark.yml`** — runs benchmarks through `python -m bench_core run`.
+  - *Manual* (`workflow_dispatch`): pick `target`, `benchmarks` (csv or `all`),
+    `sample_size` (blank = full run), and an optional `reasoning` override.
+  - *Nightly* (`schedule`): smoke-runs every target flagged `ci_regression: true`
+    to catch a provider changing its API (an adapter breaking shows up as a crash,
+    not a silent drift).
+  - A `report` job diffs each run against the committed baseline
+    (`scripts/ci_compare.py`) and writes the score tables to the job summary.
+
+**Secrets required:** `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
+`FIREWORKS_API_KEY`, `OPENROUTER_API_KEY`, `INTERFAZE_API_KEY`, `HF_TOKEN`.
+
+**Add a model to automation:** add an entry to `bench_core/targets.yaml` (mark it
+`ci_regression: true` for the nightly) and set the provider's secret — no code.
+
+**Not in CI:** `olmocr` (needs poppler + playwright + the full dataset to score)
+and `spider2` (needs the ~4GB `data/`); run those locally or on a self-hosted runner.

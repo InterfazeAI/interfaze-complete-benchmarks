@@ -1,0 +1,128 @@
+name: benchmark
+
+# Runs benchmarks through the unified CLI. Manual dispatch picks a target +
+# benchmarks; the nightly schedule smoke-tests every `ci_regression: true` target
+# to catch a provider changing its API (an adapter breaking shows up as a crash
+# or empty-content, not a score drift). Defaults to small --sample runs; a full
+# run is opt-in via the sample_size input.
+#
+# Adding a model to automation: add an entry to bench_core/targets.yaml (mark it
+# ci_regression: true for the nightly), and set its provider's secret. No code.
+#
+# Not in CI: olmocr (needs poppler + playwright + the full dataset to score) and
+# spider2 (needs the ~4GB data/). Run those locally / on a self-hosted runner.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "target name (see bench_core/targets.yaml)"
+        default: inkling
+      benchmarks:
+        description: "comma-separated benchmarks, or 'all' for the CI set"
+        default: all
+      sample_size:
+        description: "samples per benchmark (blank = full run — slow/expensive)"
+        default: "5"
+      reasoning:
+        description: "reasoning override: off|low|medium|high (blank = benchmark default)"
+        default: ""
+  schedule:
+    - cron: "0 6 * * *" # nightly plumbing health check
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      targets: ${{ steps.m.outputs.targets }}
+      sample: ${{ steps.m.outputs.sample }}
+      reasoning: ${{ steps.m.outputs.reasoning }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync
+      - id: m
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+          INPUT_BENCHMARKS: ${{ github.event.inputs.benchmarks }}
+        run: |
+          MATRIX="$(uv run python scripts/ci_matrix.py)"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "targets=$(printf '%s' "$MATRIX" | uv run python -c 'import json,sys; print(" ".join(sorted({i["target"] for i in json.load(sys.stdin)["include"]})))')" >> "$GITHUB_OUTPUT"
+          echo "sample=${{ github.event.inputs.sample_size || '5' }}" >> "$GITHUB_OUTPUT"
+          echo "reasoning=${{ github.event.inputs.reasoning }}" >> "$GITHUB_OUTPUT"
+
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      INTERFAZE_API_KEY: ${{ secrets.INTERFAZE_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync
+      - name: Run ${{ matrix.benchmark }} on ${{ matrix.target }}
+        run: |
+          SAMPLE="${{ needs.plan.outputs.sample }}"
+          REASONING="${{ needs.plan.outputs.reasoning }}"
+          uv run python -m bench_core run \
+            --target "${{ matrix.target }}" --benchmark "${{ matrix.benchmark }}" \
+            ${SAMPLE:+--sample "$SAMPLE"} ${REASONING:+--reasoning "$REASONING"}
+      - name: Upload metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-${{ matrix.target }}-${{ matrix.benchmark }}
+          path: results/${{ matrix.benchmark }}*/${{ matrix.target }}/metrics.json
+          if-no-files-found: ignore
+
+  report:
+    needs: [plan, run]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync
+      - name: Fetch run metrics
+        uses: actions/download-artifact@v4
+        with:
+          path: incoming
+          merge-multiple: true
+      - name: Overlay fresh metrics onto the contract
+        run: |
+          # artifacts store their original results/<bench>/<target>/metrics.json path
+          if [ -d incoming/results ]; then cp -r incoming/results/* results/; fi
+      - name: Compare vs baseline + write summary
+        run: |
+          for t in ${{ needs.plan.outputs.targets }}; do
+            uv run python scripts/ci_compare.py --target "$t" >> "$GITHUB_STEP_SUMMARY"
+          done
+          {
+            echo ""
+            echo '<details><summary>Full score tables</summary>'
+            echo ""
+            echo '```'
+            uv run python scripts/report_scores.py --all 2>&1 || true
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
