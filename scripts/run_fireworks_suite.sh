@@ -102,8 +102,11 @@ else
   echo "  [skip] mmmlu: set TARGET=<name> (python -m bench_core list-targets)"
 fi
 
-run_step ocrbench uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks --model "$MODEL" \
-  --provider "$PROVIDER" --reasoning "$BENCH_OPENROUTER_EFFORT"
+if [ -n "${TARGET:-}" ]; then
+  run_step ocrbench uv run python -m bench_core run --benchmark ocrbench_v2 --target "$TARGET"
+else
+  echo "  [skip] ocrbench: set TARGET=<name> (python -m bench_core list-targets)"
+fi
 
 # Gated dataset — needs `hf auth login` plus accepted terms on the Hub.
 # GPQA now runs through the unified CLI; provider/model/reasoning come from the

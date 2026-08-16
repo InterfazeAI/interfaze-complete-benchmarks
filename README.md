@@ -107,7 +107,7 @@ models over their OpenAI-compatible endpoint. Inkling takes text, image, and
 audio input, so it runs on every benchmark here:
 
 ```bash
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks
+uv run python -m bench_core run --target inkling --benchmark ocrbench_v2
 uv run -m benchmarks.olmocr.olmocr_bench_fireworks
 uv run python -m bench_core run --target inkling --benchmark gpqa
 uv run python -m bench_core run --target inkling --benchmark mmmlu
@@ -139,21 +139,10 @@ Two caveats when reading Fireworks numbers:
 Links: [paper](https://arxiv.org/abs/2501.00321) · [repo](https://github.com/Yuliang-Liu/MultimodalOCR/tree/main/OCRBench_v2)
 
 ```bash
-# Interfaze
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2
-
-# Per-provider runners
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_openai
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_openai_mini
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_anthropic
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_gemini
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_gemini_pro_31
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_grok
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_kimi          # via OpenRouter
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks     # Inkling
-
-# Text-spotting EN subset only
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_text_spotting_en
+# Any target (10k tasks, macro-of-category en_overall)
+uv run python -m bench_core run --target gpt-5.5          --benchmark ocrbench_v2
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark ocrbench_v2
+uv run python -m bench_core run --target inkling          --benchmark ocrbench_v2
 
 # Evaluate without re-running predictions
 uv run -m benchmarks.ocrbench_v2.ocrbench_v2 --evaluate-only
