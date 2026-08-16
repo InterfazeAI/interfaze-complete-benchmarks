@@ -19,6 +19,7 @@ from bench_core.runner import run_benchmark
 BENCHMARKS = {
     "gpqa": "benchmarks.gpqa.bench",
     "asr": "benchmarks.asr.bench",
+    "mmmlu": "benchmarks.mmmlu.bench",
 }
 
 

@@ -87,8 +87,12 @@ run_step refcoco uv run -m benchmarks.obj_detection.refcoco_multi \
 
 run_step olmocr uv run -m benchmarks.olmocr.olmocr_bench_fireworks --model "$MODEL"
 
-run_step mmmlu uv run -m benchmarks.mmmlu.mmmlu_multi \
-  --provider "$PROVIDER" --model "$MODEL" --reasoning "$REASONING"
+if [ -n "${TARGET:-}" ]; then
+  run_step mmmlu uv run python -m bench_core run --benchmark mmmlu --target "$TARGET" \
+    --reasoning "$([ "$REASONING" = "high" ] && echo high || echo off)"
+else
+  echo "  [skip] mmmlu: set TARGET=<name> (python -m bench_core list-targets)"
+fi
 
 run_step ocrbench uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks --model "$MODEL" \
   --provider "$PROVIDER" --reasoning "$BENCH_OPENROUTER_EFFORT"

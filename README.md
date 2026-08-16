@@ -110,7 +110,7 @@ audio input, so it runs on every benchmark here:
 uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks
 uv run -m benchmarks.olmocr.olmocr_bench_fireworks
 uv run python -m bench_core run --target inkling --benchmark gpqa
-uv run -m benchmarks.mmmlu.mmmlu_multi        --provider fireworks --model accounts/fireworks/models/inkling
+uv run python -m bench_core run --target inkling --benchmark mmmlu
 uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting standard
 uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting vision
 uv run -m benchmarks.obj_detection.refcoco_multi --provider fireworks --model accounts/fireworks/models/inkling
@@ -231,18 +231,10 @@ Links: [dataset](https://huggingface.co/datasets/openai/MMMLU)
 14 languages, exact-match accuracy macro-averaged across languages.
 
 ```bash
-# Interfaze
-uv run -m benchmarks.mmmlu.mmmlu
-uv run -m benchmarks.mmmlu.mmmlu --languages DE_DE FR_FR     # subset of languages
-
-# Any provider
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider openai    --model gpt-5.4-mini
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider gemini    --model gemini-3.1-pro-preview
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider anthropic --model claude-sonnet-4-6
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider interfaze --model interfaze-beta
-
-# Evaluate only
-uv run -m benchmarks.mmmlu.mmmlu --evaluate-only
+# Any target (MMMLU-lite, 14 languages, macro-averaged)
+uv run python -m bench_core run --target gpt-5.5          --benchmark mmmlu
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark mmmlu --reasoning high
+uv run python -m bench_core run --target inkling          --benchmark mmmlu
 ```
 
 ---
