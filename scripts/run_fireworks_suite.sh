@@ -92,13 +92,13 @@ run_step ocrbench uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks --model
   --provider "$PROVIDER" --reasoning "$BENCH_OPENROUTER_EFFORT"
 
 # Gated dataset — needs `hf auth login` plus accepted terms on the Hub.
-# GPQA has separate per-host runners; gpqa_fireworks talks only to Fireworks, so
-# an OpenRouter model id would 404 there.
-if [ "$PROVIDER" = "openrouter" ]; then
-  run_step gpqa uv run -m benchmarks.gpqa.gpqa_openrouter --model "$MODEL" \
-    --thinking "$([ "$REASONING" = "high" ] && echo on || echo off)"
+# GPQA now runs through the unified CLI; provider/model/reasoning come from the
+# target (bench_core/targets.yaml), so set TARGET=<name> (see `list-targets`).
+if [ -n "${TARGET:-}" ]; then
+  run_step gpqa uv run python -m bench_core run --benchmark gpqa --target "$TARGET" \
+    --reasoning "$([ "$REASONING" = "high" ] && echo high || echo off)"
 else
-  run_step gpqa uv run -m benchmarks.gpqa.gpqa_fireworks --model "$MODEL"
+  echo "  [skip] gpqa: set TARGET=<name> (python -m bench_core list-targets)"
 fi
 
 # Grounding is scored strictly above; this adds the repo's uniform

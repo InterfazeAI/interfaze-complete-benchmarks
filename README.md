@@ -109,7 +109,7 @@ audio input, so it runs on every benchmark here:
 ```bash
 uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks
 uv run -m benchmarks.olmocr.olmocr_bench_fireworks
-uv run -m benchmarks.gpqa.gpqa_fireworks
+uv run python -m bench_core run --target inkling --benchmark gpqa
 uv run -m benchmarks.mmmlu.mmmlu_multi        --provider fireworks --model accounts/fireworks/models/inkling
 uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting standard
 uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting vision
@@ -279,24 +279,13 @@ bash benchmarks/mmmu_pro/run_smoke.sh
 Links: [paper](https://arxiv.org/abs/2311.12022) · [dataset](https://huggingface.co/datasets/Idavidrein/gpqa) (config: `gpqa_diamond`)
 
 ```bash
-# OpenAI
-uv run -m benchmarks.gpqa.gpqa_openai
-uv run -m benchmarks.gpqa.gpqa_openai --model gpt-5.4-mini
-
-# Gemini
-uv run -m benchmarks.gpqa.gpqa_gemini
-uv run -m benchmarks.gpqa.gpqa_gemini --model gemini-3.1-pro-preview
-
-# Any model via OpenRouter (Grok, Kimi, Anthropic, etc.)
-uv run -m benchmarks.gpqa.gpqa_openrouter --model x-ai/grok-4.3 --thinking on
-uv run -m benchmarks.gpqa.gpqa_openrouter --model moonshotai/kimi-k2.6
-
-# Fireworks (Inkling)
-uv run -m benchmarks.gpqa.gpqa_fireworks
-uv run -m benchmarks.gpqa.gpqa_fireworks --thinking on --effort high
-
-# Evaluate only
-uv run -m benchmarks.gpqa.gpqa_openai --evaluate-only
+# GPQA runs through the unified CLI. Provider, model, and reasoning defaults come
+# from the target (bench_core/targets.yaml); pick any target by name.
+uv run python -m bench_core list-targets
+uv run python -m bench_core run --target gpt-5.5          --benchmark gpqa
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark gpqa --reasoning high
+uv run python -m bench_core run --target grok-4.3         --benchmark gpqa
+uv run python -m bench_core run --target inkling          --benchmark gpqa
 ```
 
 ---
