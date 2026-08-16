@@ -132,6 +132,15 @@ def cmd_list_targets(args) -> None:
         print(f"{name:22} {t.provider:11} {t.model_id}")
 
 
+def cmd_migrate_results(args) -> None:
+    from bench_core.migrate import migrate_results
+
+    log = migrate_results(dry_run=args.dry_run)
+    for line in log:
+        print(line)
+    print(f"\n{'[dry-run] ' if args.dry_run else ''}{len(log)} action(s)")
+
+
 def main(argv=None) -> None:
     p = argparse.ArgumentParser(prog="bench")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -154,6 +163,14 @@ def main(argv=None) -> None:
 
     lt = sub.add_parser("list-targets", help="list configured targets")
     lt.set_defaults(func=cmd_list_targets)
+
+    mr = sub.add_parser(
+        "migrate-results", help="backfill legacy flat results into the new contract"
+    )
+    mr.add_argument(
+        "--dry-run", action="store_true", help="show actions without writing"
+    )
+    mr.set_defaults(func=cmd_migrate_results)
 
     args = p.parse_args(argv)
     args.func(args)

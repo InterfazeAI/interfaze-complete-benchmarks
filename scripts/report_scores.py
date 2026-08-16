@@ -7,27 +7,23 @@ Detailed benchmark scores for every model with results on disk.
     uv run python scripts/report_scores.py --list          # just the model names
     uv run python scripts/report_scores.py --model inkling --tsv   # paste into Sheets
 
-Reads results/*_metrics.json plus the olmOCR run logs (olmOCR-bench prints its
-per-split table to stdout instead of persisting metrics, so the logs are the
-only source for those numbers).
-
-Model names are canonicalised across providers — accounts/fireworks/models/inkling,
-thinkingmachines/inkling and google/gemini-3.7-flash all collapse to the bare
-model name, so one row means one model regardless of which host produced it.
-Where the same model+benchmark exists from two hosts, both are kept and the
-provider is shown, because the hosts are NOT equivalent at the same nominal
-reasoning setting.
+Reads the results/<benchmark>/<target>/metrics.json contract (written by the CLI
+and `bench migrate-results`) plus the olmOCR run logs (olmOCR-bench prints its
+per-split table to stdout instead of persisting metrics, so the logs are the only
+source for those numbers). One row per target; the contract keys by
+(benchmark, target), so `bench migrate-results` already picked the best run per
+slot when several legacy runs collided.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))  # so `bench_core` is importable when run as a script
 RESULTS = ROOT / "results"
 LOGS = ROOT / "logs"
 
@@ -84,17 +80,73 @@ MMMLU_LANGS = [
     "HI_IN",
 ]
 
-MMMU_STD_SUBJECTS = """overall Art Electronics Economics Marketing Finance Art_Theory
-Public_Health Basic_Medical_Science Sociology Literature Physics Energy_and_Power History
-Design Materials Biology Psychology Geography Manage Pharmacy Agriculture Clinical_Medicine
-Accounting Computer_Science Architecture_and_Engineering Chemistry Math
-Diagnostics_and_Laboratory_Medicine Mechanical_Engineering Music""".split()
+MMMU_STD_SUBJECTS = [
+    "overall",
+    "Art",
+    "Electronics",
+    "Economics",
+    "Marketing",
+    "Finance",
+    "Art_Theory",
+    "Public_Health",
+    "Basic_Medical_Science",
+    "Sociology",
+    "Literature",
+    "Physics",
+    "Energy_and_Power",
+    "History",
+    "Design",
+    "Materials",
+    "Biology",
+    "Psychology",
+    "Geography",
+    "Manage",
+    "Pharmacy",
+    "Agriculture",
+    "Clinical_Medicine",
+    "Accounting",
+    "Computer_Science",
+    "Architecture_and_Engineering",
+    "Chemistry",
+    "Math",
+    "Diagnostics_and_Laboratory_Medicine",
+    "Mechanical_Engineering",
+    "Music",
+]
 
-MMMU_VIS_SUBJECTS = """overall Economics Art_Theory Basic_Medical_Science Art Literature
-Pharmacy Clinical_Medicine Sociology Public_Health Design Physics History Chemistry
-Electronics Marketing Geography Math Biology Computer_Science Manage Finance Agriculture
-Accounting Psychology Mechanical_Engineering Diagnostics_and_Laboratory_Medicine
-Energy_and_Power Materials Architecture_and_Engineering Music""".split()
+MMMU_VIS_SUBJECTS = [
+    "overall",
+    "Economics",
+    "Art_Theory",
+    "Basic_Medical_Science",
+    "Art",
+    "Literature",
+    "Pharmacy",
+    "Clinical_Medicine",
+    "Sociology",
+    "Public_Health",
+    "Design",
+    "Physics",
+    "History",
+    "Chemistry",
+    "Electronics",
+    "Marketing",
+    "Geography",
+    "Math",
+    "Biology",
+    "Computer_Science",
+    "Manage",
+    "Finance",
+    "Agriculture",
+    "Accounting",
+    "Psychology",
+    "Mechanical_Engineering",
+    "Diagnostics_and_Laboratory_Medicine",
+    "Energy_and_Power",
+    "Materials",
+    "Architecture_and_Engineering",
+    "Music",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -119,141 +171,91 @@ def _pct(x):
 
 
 def load_metrics() -> dict:
-    """{model: {benchmark_key: payload}} from results/*_metrics.json."""
+    """{model: {benchmark_key: payload}} from the results/<benchmark>/<target>/
+    metrics.json contract (written by the CLI and `bench migrate-results`)."""
+    from bench_core.results import discover
+
     out: dict[str, dict] = {}
-
-    def _n(payload):
-        """Sample count, for choosing between duplicate runs of the same
-        benchmark. Different hosts write different filenames for the same model
-        (voxpopuli_aa_gemini_* vs voxpopuli_aa_openrouter_google_*), and a 2-row
-        smoke test must never shadow a full run just because its filename sorts
-        later."""
-        for k in ("n", "num_samples", "total", "total_local_subset"):
-            v = payload.get(k)
-            if isinstance(v, int):
-                return v
-        return 0
-
-    def put(model, key, payload, source=""):
-        bucket = out.setdefault(canon(model), {})
-        prev = bucket.get(key)
-        payload = dict(payload, source=source)
-        if prev is None or _n(payload) >= _n(prev):
-            if prev is not None and _n(prev):
-                payload["shadowed"] = (prev.get("source"), _n(prev))
-            bucket[key] = payload
-        else:
-            prev.setdefault("shadowed", (source, _n(payload)))
-
-    for p in sorted(RESULTS.glob("*_metrics.json")):
-        name = p.name
-        try:
-            d = json.loads(p.read_text())
-        except json.JSONDecodeError:
+    for d in discover(RESULTS):
+        benchmark, model = d.get("benchmark"), d.get("target")
+        if not benchmark or not model:
             continue
-        model = d.get("model") or ""
+        b = out.setdefault(model, {})
+        reasoning = (d.get("reasoning") or {}).get("mode", "off")
 
-        if name.startswith("ocrbench_v2_"):
-            model = model or name.replace("ocrbench_v2_", "").replace(
-                "_metrics.json", ""
-            )
-            covered = sum(1 for v in d.get("en_scores", {}).values() if v.get("count"))
-            put(
-                model,
-                "ocrbench",
-                {
-                    "en_overall": _pct(d.get("en_overall")),
-                    "cn_overall": _pct(d.get("cn_overall")),
-                    "cats": {
-                        k: _pct(v["avg"]) if v.get("count") else None
-                        for k, v in d.get("en_scores", {}).items()
-                    },
-                    "counts": {
-                        k: v.get("count", 0) for k, v in d.get("en_scores", {}).items()
-                    },
-                    "partial": covered < 8,
-                    "covered": covered,
+        if benchmark == "gpqa":
+            b["gpqa"] = {
+                "overall": _pct(d.get("accuracy")),
+                "n": d.get("total") or d.get("n"),
+                "domains": {
+                    k: _pct(v["accuracy"])
+                    for k, v in (d.get("per_domain") or {}).items()
                 },
-            )
-        elif name.startswith("mmmupro_"):
-            setting = "standard" if "_standard_" in name else "vision"
-            reasoning = "high" if "reasoninghigh" in name else "off"
-            put(
-                model,
-                f"mmmupro_{setting}_{reasoning}",
-                {
-                    "overall": _pct(d.get("accuracy")),
-                    "n": d.get("num_samples"),
-                    "subjects": {
-                        k: _pct(v["accuracy"])
-                        for k, v in (d.get("per_subject") or {}).items()
-                    },
-                    "reasoning": reasoning,
-                },
-            )
-        elif name.startswith("mmmlulite_"):
-            put(
-                model,
-                "mmmlu",
-                {
-                    "macro": _pct(d.get("macro_accuracy")),
-                    "n": d.get("num_samples"),
-                    "langs": {
-                        k: _pct(v["accuracy"])
-                        for k, v in (d.get("per_language") or {}).items()
-                    },
-                    "reasoning": "high" if "reasoninghigh" in name else "off",
-                },
-            )
-        elif name.startswith("refcoco_"):
-            split = name.split("_")[1]
-            oracle = "_oracle_" in name
-            put(
-                model,
-                f"refcoco_{split}" + ("_oracle" if oracle else ""),
-                {
-                    "acc": _pct(d.get("accuracy")),
-                    "mean_iou": round(d.get("mean_iou", 0), 4),
-                    "n": d.get("total"),
-                    "split": split,
-                },
-            )
-        elif name.startswith("voxpopuli_aa_"):
+            }
+        elif benchmark == "voxpopuli_aa":
             wer = d.get("corpus_wer")
-            put(
-                model,
-                "asr",
-                {
-                    "wer": _pct(wer),
-                    "inv": _pct(1 - wer) if wer is not None else None,
-                    "cer": _pct(d.get("corpus_cer")),
-                    "n": d.get("num_samples"),
+            b["asr"] = {
+                "wer": _pct(wer),
+                "inv": _pct(1 - wer) if wer is not None else None,
+                "cer": _pct(d.get("corpus_cer")),
+                "n": d.get("num_samples") or d.get("n"),
+            }
+        elif benchmark == "mmmlu":
+            b["mmmlu"] = {
+                "macro": _pct(d.get("macro_accuracy")),
+                "n": d.get("num_samples") or d.get("n"),
+                "langs": {
+                    k: _pct(v["accuracy"])
+                    for k, v in (d.get("per_language") or {}).items()
                 },
-            )
-        elif name.startswith("spider2_lite_local_"):
-            put(
-                model,
-                "spider2",
-                {
-                    "acc": _pct(d.get("accuracy_of_local_135")),
-                    "correct": d.get("correct"),
-                    "n": d.get("total_local_subset"),
+                "reasoning": reasoning,
+            }
+        elif benchmark.startswith("mmmu_pro_"):
+            setting = benchmark[len("mmmu_pro_") :]
+            b[f"mmmupro_{setting}_{reasoning}"] = {
+                "overall": _pct(d.get("accuracy")),
+                "n": d.get("num_samples") or d.get("n"),
+                "subjects": {
+                    k: _pct(v["accuracy"])
+                    for k, v in (d.get("per_subject") or {}).items()
                 },
-            )
-        elif "gpqa_diamond" in name:
-            model = model or name.split("_")[1]
-            put(
-                model,
-                "gpqa",
-                {
-                    "overall": _pct(d.get("accuracy")),
-                    "n": d.get("total"),
-                    "domains": {
-                        k: _pct(v["accuracy"])
-                        for k, v in (d.get("per_domain") or {}).items()
-                    },
+                "reasoning": reasoning,
+            }
+        elif benchmark.startswith("refcoco_"):
+            split = benchmark[len("refcoco_") :]
+            b[f"refcoco_{split}"] = {
+                "acc": _pct(d.get("accuracy")),
+                "mean_iou": round(d.get("mean_iou", 0), 4),
+                "n": d.get("total") or d.get("n"),
+                "split": split,
+            }
+            orc = d.get("oracle")
+            if orc:
+                b[f"refcoco_{split}_oracle"] = {
+                    "acc": _pct(orc.get("accuracy")),
+                    "mean_iou": round(orc.get("mean_iou", 0), 4),
+                    "n": orc.get("total") or d.get("total"),
+                    "split": split,
+                }
+        elif benchmark == "ocrbench_v2":
+            en = d.get("en_scores", {})
+            covered = sum(1 for v in en.values() if v.get("count"))
+            b["ocrbench"] = {
+                "en_overall": _pct(d.get("en_overall")),
+                "cn_overall": _pct(d.get("cn_overall")),
+                "cats": {
+                    k: _pct(v["avg"]) if v.get("count") else None for k, v in en.items()
                 },
-            )
+                "counts": {k: v.get("count", 0) for k, v in en.items()},
+                "partial": covered < 8,
+                "covered": covered,
+            }
+        elif benchmark == "spider2_lite":
+            b["spider2"] = {
+                "acc": _pct(d.get("accuracy_of_local_135")),
+                "correct": d.get("correct"),
+                "n": d.get("total_local_subset"),
+            }
     return out
 
 
@@ -268,16 +270,20 @@ def load_olmocr() -> dict:
     for log in dict.fromkeys(candidates):
         text = log.read_text(errors="ignore").replace("\r", "\n")
         head = re.search(
-            r"^(\S+)\s*:\s*Average Score:\s*([\d.]+)%\s*±\s*([\d.]+)%", text, re.M
+            r"^(\S+)\s*:\s*Average Score:\s*([\d.]+)%\s*±\s*([\d.]+)%",
+            text,
+            re.MULTILINE,
         )
         if not head:
             continue
         model, overall, ci = head.group(1), float(head.group(2)), float(head.group(3))
         splits = {
             m.group(1): float(m.group(2))
-            for m in re.finditer(r"^\s+(\w+)\.jsonl\s*:\s*([\d.]+)%", text, re.M)
+            for m in re.finditer(
+                r"^\s+(\w+)\.jsonl\s*:\s*([\d.]+)%", text, re.MULTILINE
+            )
         }
-        base = re.search(r"^\s+baseline\s*:\s*([\d.]+)%", text, re.M)
+        base = re.search(r"^\s+baseline\s*:\s*([\d.]+)%", text, re.MULTILINE)
         if base:
             splits["baseline"] = float(base.group(1))
         out[canon(model)] = {

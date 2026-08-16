@@ -216,6 +216,11 @@ external/
 benchmarks/spider2_lite/data/
 benchmarks/olmocr/bench/full_data/
 
+# New-contract per-run responses (large; regenerable via `bench migrate-results`
+# from the committed legacy flat results, or re-produced by a fresh run). The
+# canonical metrics.json under results/<benchmark>/<target>/ IS committed.
+results/*/*/responses.jsonl
+
 # OCRBench spotting-eval scratch (generated during scoring)
 benchmarks/ocrbench_v2/eval_scripts/spotting_eval/gt/
 benchmarks/ocrbench_v2/eval_scripts/spotting_eval/submit/
