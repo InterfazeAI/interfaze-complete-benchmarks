@@ -1,8 +1,3 @@
-"""Anthropic adapter. System messages become the top-level `system` param;
-`max_tokens` is mandatory and must exceed `budget_tokens` when thinking is
-enabled — both handled declaratively from the cap.
-"""
-
 from __future__ import annotations
 
 from bench_core.capabilities import Capabilities
@@ -32,7 +27,8 @@ class AnthropicAdapter(ProviderAdapter):
 
     def _content(self, msg: Message, caps: Capabilities):
         if all(isinstance(p, TextPart) for p in msg.parts):
-            return "".join(p.text for p in msg.parts)
+            text_parts = [p for p in msg.parts if isinstance(p, TextPart)]
+            return "".join(p.text for p in text_parts)
         blocks = []
         for p in msg.parts:
             if isinstance(p, TextPart):
@@ -65,7 +61,7 @@ class AnthropicAdapter(ProviderAdapter):
 
         thinking_on = (inj.anthropic_thinking or {}).get("type") == "enabled"
         if thinking_on:
-            budget = inj.anthropic_thinking["budget_tokens"]
+            budget = inj.anthropic_thinking.get("budget_tokens", 0) if inj.anthropic_thinking else 0
             max_tokens = req.max_tokens or extra.get("on_max_tokens", _DEFAULT_ON_MAX)
             if max_tokens <= budget:
                 max_tokens = budget + _BUDGET_MARGIN

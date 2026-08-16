@@ -1,11 +1,3 @@
-"""Provider adapter contract + shared behavior.
-
-`decode` and `classify_error` are identical across hosts (they dispatch on the
-capability's response shape / the exception), so they live here. Subclasses
-supply `build_client`, `encode`, and `call` — the parts that are genuinely
-provider-specific.
-"""
-
 from __future__ import annotations
 
 import os

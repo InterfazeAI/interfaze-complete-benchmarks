@@ -1,8 +1,4 @@
-"""Adapter for hosts that speak OpenAI Chat Completions: openai, fireworks,
-openrouter, interfaze. One `encode`; the four concrete providers differ only in
-base_url / key_spec / capability defaults (defined in their target YAML + a thin
-factory), not in code.
-"""
+# OpenAI Chat Completions: openai, fireworks, openrouter, interfaze.
 
 from __future__ import annotations
 
@@ -34,7 +30,8 @@ class OpenAICompatAdapter(ProviderAdapter):
 
     def _content(self, msg: Message, caps: Capabilities) -> Any:
         if all(isinstance(p, TextPart) for p in msg.parts):
-            return "".join(p.text for p in msg.parts)
+            text_parts = [p for p in msg.parts if isinstance(p, TextPart)]
+            return "".join(p.text for p in text_parts)
         blocks = []
         for p in msg.parts:
             if isinstance(p, TextPart):

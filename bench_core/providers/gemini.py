@@ -1,7 +1,5 @@
-"""Gemini (native google-genai) adapter. Reasoning becomes a ThinkingConfig
-(level for 3.x, budget for 2.5); media parts become genai Parts. The client is
-cached at the factory level to avoid the "client has been closed" GC bug.
-"""
+# Reasoning becomes a ThinkingConfig (level for 3.x, budget for 2.5); media parts become genai Parts.
+# The client is cached at the factory level to avoid the "client has been closed" GC bug.
 
 from __future__ import annotations
 
@@ -50,7 +48,7 @@ class GeminiAdapter(ProviderAdapter):
         inj = build_reasoning(req.reasoning.mode, caps.reasoning)
         thinking = None
         if inj.thinking_level is not None:
-            thinking = types.ThinkingConfig(thinking_level=inj.thinking_level)
+            thinking = types.ThinkingConfig(thinking_level=types.ThinkingLevel(inj.thinking_level))
         elif inj.thinking_budget is not None:
             thinking = types.ThinkingConfig(thinking_budget=inj.thinking_budget)
 

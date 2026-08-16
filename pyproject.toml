@@ -48,6 +48,7 @@ dependencies = [
     "playwright>=1.44.0",
     "gdown>=6.1.0",
     "google-genai>=2.18.1",
+    "anthropic>=0.122.0",
 ]
 
 [dependency-groups]
