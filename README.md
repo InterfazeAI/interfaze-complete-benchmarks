@@ -22,11 +22,7 @@ OPENROUTER_API_KEY=...
 FIREWORKS_API_KEY=...
 ```
 
-Benchmarks run through one CLI: `uv run python -m bench_core run --target <name>
---benchmark <name>` (see `python -m bench_core list-targets`). `--sample N` is a
-smoke test; re-running resumes from the per-run checkpoint (completed samples are
-skipped). The remaining bespoke runners (`olmocr_bench_reducto`, BFCL) keep their
-own `--limit`/`--evaluate-only` flags.
+Benchmarks run through one CLI: `uv run python -m bench_core run --target <name> --benchmark <name>` (see `python -m bench_core list-targets`). `--sample N` is a smoke test; re-running resumes from the per-run checkpoint (completed samples are skipped). The remaining bespoke runners (`olmocr_bench_reducto`, BFCL) keep their own `--limit`/`--evaluate-only` flags.
 
 Two extra setup steps for specific benchmarks:
 
