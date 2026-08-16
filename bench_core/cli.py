@@ -140,6 +140,14 @@ def cmd_migrate_results(args) -> None:
 
 
 def main(argv=None) -> None:
+    # pick up provider keys from a repo-root .env (adapters read os.getenv)
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
     p = argparse.ArgumentParser(prog="bench")
     sub = p.add_subparsers(dest="cmd", required=True)
 
