@@ -1,4 +1,9 @@
-"""MMMLU-lite: 14-language MCQ; per-language accuracy, macro-averaged headline."""
+"""MMMLU: 14-language MCQ; per-language accuracy, macro-averaged headline.
+
+Two variants (as in the original): `lite` (opencompass/mmmlu_lite, ~20k, the
+default and what the archived leaderboard numbers use) and `full`
+(openai/MMMLU, ~196k). Pick with --variant.
+"""
 
 from __future__ import annotations
 
@@ -10,9 +15,11 @@ from bench_core.request import Message, ReasoningSpec, Request, TextPart
 NAME = "mmmlu"
 ID_KEY = "id"
 PRIMARY_METRIC = "macro_accuracy"
+VARIANTS = ["lite", "full"]
 DEFAULTS = {"reasoning": "off", "rate_limit": 50, "max_in_flight": 8}
 
 _DATASET_LITE_ID = "opencompass/mmmlu_lite"
+_DATASET_FULL_ID = "openai/MMMLU"
 _SPLIT = "test"
 LANGUAGES = [
     "AR_XY",
@@ -59,27 +66,43 @@ def parse_answer(text: str) -> str | None:
     return m.group(0) if m else None
 
 
-def load_samples(sample_size: int | None = None) -> list[dict]:
+def _build_sample(row: dict, lang: str, i: int, variant: str) -> dict:
+    # lite (opencompass) and full (openai/MMMLU) use different column names +
+    # id sources; the prompt/answer semantics are identical.
+    if variant == "lite":
+        return {
+            "id": f"{lang}:{i}",
+            "language": lang,
+            "subject": row["subject"],
+            "question": row["input"],
+            "a": row["A"],
+            "b": row["B"],
+            "c": row["C"],
+            "d": row["D"],
+            "answer": str(row["target"]).strip().upper(),
+        }
+    return {
+        "id": f"{lang}:{row.get('Unnamed: 0')}",
+        "language": lang,
+        "subject": row["Subject"],
+        "question": row["Question"],
+        "a": row["A"],
+        "b": row["B"],
+        "c": row["C"],
+        "d": row["D"],
+        "answer": str(row["Answer"]).strip().upper(),
+    }
+
+
+def load_samples(sample_size: int | None = None, variant: str = "lite") -> list[dict]:
     from datasets import load_dataset
 
+    dataset_id = _DATASET_LITE_ID if variant == "lite" else _DATASET_FULL_ID
     samples = []
     for lang in LANGUAGES:
-        ds = load_dataset(_DATASET_LITE_ID, lang, split=_SPLIT)
+        ds = load_dataset(dataset_id, lang, split=_SPLIT)
         for i, row in enumerate(ds):
-            row = dict(row)
-            samples.append(
-                {
-                    "id": f"{lang}:{i}",
-                    "language": lang,
-                    "subject": row["subject"],
-                    "question": row["input"],
-                    "a": row["A"],
-                    "b": row["B"],
-                    "c": row["C"],
-                    "d": row["D"],
-                    "answer": str(row["target"]).strip().upper(),
-                }
-            )
+            samples.append(_build_sample(dict(row), lang, i, variant))
     return samples[:sample_size] if sample_size else samples
 
 

@@ -22,6 +22,42 @@ def test_parse_answer():
     assert bench.parse_answer("") is None
 
 
+def test_build_sample_lite_and_full_variants():
+    # lite (opencompass) schema
+    lite = bench._build_sample(
+        {
+            "subject": "math",
+            "input": "2+2?",
+            "A": "3",
+            "B": "4",
+            "C": "5",
+            "D": "6",
+            "target": "b",
+        },
+        "EN",
+        3,
+        "lite",
+    )
+    assert lite["id"] == "EN:3" and lite["question"] == "2+2?" and lite["answer"] == "B"
+    # full (openai/MMMLU) schema — id from Unnamed: 0, Question/Subject/Answer columns
+    full = bench._build_sample(
+        {
+            "Unnamed: 0": 7,
+            "Subject": "math",
+            "Question": "2+2?",
+            "A": "3",
+            "B": "4",
+            "C": "5",
+            "D": "6",
+            "Answer": "b",
+        },
+        "EN",
+        0,
+        "full",
+    )
+    assert full["id"] == "EN:7" and full["subject"] == "math" and full["answer"] == "B"
+
+
 def test_score_macro_averages_languages():
     samples = [
         {"id": "EN:0", "language": "EN", "subject": "math", "answer": "A"},

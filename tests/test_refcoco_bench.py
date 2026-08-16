@@ -20,6 +20,13 @@ STRICT_TAGS = [
 ORACLE_BASE = "refcoco_val_fireworks_accounts_fireworks_models_inkling"
 
 
+def test_parse_variant_restores_plus_and_g_datasets():
+    assert bench._parse_variant("val") == ("lmms-lab/RefCOCO", "val")
+    assert bench._parse_variant("testA") == ("lmms-lab/RefCOCO", "testA")
+    assert bench._parse_variant("plus-testB") == ("lmms-lab/RefCOCO+", "testB")
+    assert bench._parse_variant("g-test") == ("lmms-lab/RefCOCOg", "test")
+
+
 def test_compute_iou():
     assert bench.compute_iou([0, 0, 10, 10], [0, 0, 10, 10]) == 1.0
     assert bench.compute_iou([0, 0, 10, 10], [20, 20, 30, 30]) == 0.0

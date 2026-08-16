@@ -11,7 +11,7 @@ class ErrorKind(str, Enum):
     )
     RATE_LIMITED = "rate_limited"
     TRANSIENT = "transient"  # timeout / 5xx / connection -> backoff + retry
-    EMPTY_CONTENT = "empty_content"  # returned nothing usable -> retry
+    EMPTY_CONTENT = "empty_content"
     FATAL = "fatal"  # auth / missing model / unrecognized 4xx -> fail the sample
 
 

@@ -200,8 +200,9 @@ def load_metrics() -> dict:
                 "cer": _pct(d.get("corpus_cer")),
                 "n": d.get("num_samples") or d.get("n"),
             }
-        elif benchmark == "mmmlu":
-            b["mmmlu"] = {
+        elif benchmark.startswith("mmmlu"):  # mmmlu_lite / mmmlu_full
+            variant = benchmark[len("mmmlu_") :] if "_" in benchmark else "lite"
+            b[f"mmmlu_{variant}"] = {
                 "macro": _pct(d.get("macro_accuracy")),
                 "n": d.get("num_samples") or d.get("n"),
                 "langs": {
@@ -431,15 +432,18 @@ def report(models: list[str], data: dict, olm: dict, tsv=False):
         print("\n=== GPQA Diamond ===")
         table([c for c, _ in [("Model", None)] + GPQA_COLS], rows, tsv)
 
-    # ---- MMMLU
-    rows = []
-    for m in models:
-        d = get(m, "mmmlu")
-        if d:
-            rows.append([m, d["macro"]] + [d["langs"].get(lg) for lg in MMMLU_LANGS])
-    if rows:
-        print("\n=== MMMLU ===")
-        table(["Model", "macro"] + MMMLU_LANGS, rows, tsv)
+    # ---- MMMLU (lite and/or full)
+    for variant in ("lite", "full"):
+        rows = []
+        for m in models:
+            d = get(m, f"mmmlu_{variant}")
+            if d:
+                rows.append(
+                    [m, d["macro"]] + [d["langs"].get(lg) for lg in MMMLU_LANGS]
+                )
+        if rows:
+            print(f"\n=== MMMLU ({variant}) ===")
+            table(["Model", "macro"] + MMMLU_LANGS, rows, tsv)
 
     # ---- MMMU-Pro, subjects as rows in the sheet's order
     for setting, subjects in (

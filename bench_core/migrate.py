@@ -30,7 +30,9 @@ def _classify(name: str) -> str | None:
     if name.startswith("mmmupro_vision_"):
         return "mmmu_pro_vision"
     if name.startswith("mmmlulite_"):
-        return "mmmlu"
+        return "mmmlu_lite"
+    if name.startswith("mmmlufull_"):
+        return "mmmlu_full"
     if name.startswith("refcoco_"):
         return f"refcoco_{name.split('_')[1]}"
     if name.startswith("voxpopuli_aa_"):

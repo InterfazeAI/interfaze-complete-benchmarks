@@ -16,10 +16,26 @@ from bench_core.request import Message, ReasoningSpec, Request, TextPart
 NAME = "refcoco"
 ID_KEY = "id"
 PRIMARY_METRIC = "accuracy"
-VARIANTS = ["val", "testA", "testB", "test"]
+# variant = split for base RefCOCO, or "plus-<split>" / "g-<split>" for
+# RefCOCO+ / RefCOCOg (same underlying task, lmms-lab packaging).
+VARIANTS = [
+    "val",
+    "testA",
+    "testB",
+    "test",
+    "plus-val",
+    "plus-testA",
+    "plus-testB",
+    "g-val",
+    "g-test",
+]
 DEFAULTS = {"reasoning": "off", "rate_limit": 25, "max_in_flight": 8}
 
-_DATASET_ID = "lmms-lab/RefCOCO"
+_DATASETS = {
+    "": "lmms-lab/RefCOCO",
+    "plus": "lmms-lab/RefCOCO+",
+    "g": "lmms-lab/RefCOCOg",
+}
 _MAX_SIDE = 1024
 IOU_THRESHOLD = 0.5
 _THRESHOLDS = [0.3, 0.5, 0.7, 0.75, 0.9]
@@ -190,10 +206,19 @@ def _sent_dims(w, h, max_side=_MAX_SIDE):
     return round(w * scale), round(h * scale)
 
 
+def _parse_variant(variant: str) -> tuple[str, str]:
+    if variant.startswith("plus-"):
+        return _DATASETS["plus"], variant[len("plus-") :]
+    if variant.startswith("g-"):
+        return _DATASETS["g"], variant[len("g-") :]
+    return _DATASETS[""], variant
+
+
 def load_samples(sample_size: int | None = None, variant: str = "val") -> list[dict]:
     from datasets import load_dataset
 
-    ds = load_dataset(_DATASET_ID, split=variant)
+    dataset_id, split = _parse_variant(variant)
+    ds = load_dataset(dataset_id, split=split)
     rows = list(ds)[:sample_size] if sample_size else list(ds)
     samples = []
     for i, row in enumerate(rows):

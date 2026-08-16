@@ -13,10 +13,6 @@ _OFF_MODES = {"off", "none", "disabled"}
 
 @dataclass
 class ReasoningInjection:
-    """How to attach reasoning to a request. A given cap fills exactly one of
-    the mechanism fields; the rest stay empty/None so an adapter that reads the
-    wrong field simply sees "nothing to do"."""
-
     kwargs: dict = field(
         default_factory=dict
     )  # top-level create() kwargs (reasoning_effort)
@@ -32,8 +28,6 @@ class ReasoningInjection:
 
 
 def _resolve_value(mode: str, cap: ReasoningCap) -> Any:
-    """Concrete value for a mode: `off`/`on` come from the cap; an intermediate
-    mode passes through literally (caller owns vocabulary validity)."""
     if mode in _OFF_MODES:
         return cap.off_value
     if mode in _HIGH_MODES:
@@ -42,9 +36,6 @@ def _resolve_value(mode: str, cap: ReasoningCap) -> Any:
 
 
 def _allow_temperature(mode: str, cap: ReasoningCap) -> bool:
-    """Temperature is allowed when thinking is not engaged, or when the host
-    tolerates temperature alongside active thinking. An off run that truly
-    disables thinking counts as "not engaged"."""
     if mode in _OFF_MODES and cap.true_off:
         return True
     return cap.temperature_when_on

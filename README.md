@@ -172,11 +172,13 @@ Links: [RefCOCO/RefCOCO+ paper](https://arxiv.org/abs/1608.00272) · [RefCOCOg p
 Metric: Acc@IoU=0.5 on the referring-expression bounding box.
 
 ```bash
-# Any target; --variant is the split (val | testA | testB | test). Metrics include
-# a strict Acc@0.5 plus a format-tolerant `oracle` upper bound (submetrics.oracle).
+# --variant selects dataset + split: base RefCOCO (val|testA|testB|test), or
+# RefCOCO+ (plus-val|plus-testA|plus-testB) / RefCOCOg (g-val|g-test). Metrics
+# include a strict Acc@0.5 plus a format-tolerant `oracle` upper bound.
 uv run python -m bench_core run --target gpt-5.5          --benchmark refcoco --variant val
 uv run python -m bench_core run --target gemini-3.7-flash --benchmark refcoco --variant testA
-uv run python -m bench_core run --target inkling          --benchmark refcoco --variant val
+uv run python -m bench_core run --target inkling          --benchmark refcoco --variant plus-testB
+uv run python -m bench_core run --target inkling          --benchmark refcoco --variant g-val
 
 # JigsawStack object_detection API (a bespoke endpoint, not a chat model)
 uv run -m benchmarks.obj_detection.ob_det_api
@@ -206,10 +208,11 @@ Links: [dataset](https://huggingface.co/datasets/openai/MMMLU)
 14 languages, exact-match accuracy macro-averaged across languages.
 
 ```bash
-# Any target (MMMLU-lite, 14 languages, macro-averaged)
-uv run python -m bench_core run --target gpt-5.5          --benchmark mmmlu
+# 14 languages, macro-averaged. --variant lite (opencompass/mmmlu_lite, ~20k,
+# DEFAULT, matches the archived leaderboard numbers) or full (openai/MMMLU, ~196k).
+uv run python -m bench_core run --target gpt-5.5          --benchmark mmmlu                 # lite
 uv run python -m bench_core run --target gemini-3.7-flash --benchmark mmmlu --reasoning high
-uv run python -m bench_core run --target inkling          --benchmark mmmlu
+uv run python -m bench_core run --target inkling          --benchmark mmmlu --variant full  # full MMLU
 ```
 
 ---
