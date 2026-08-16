@@ -1,0 +1,11 @@
+name: gemini-2.5-flash
+provider: gemini
+model_id: gemini-2.5-flash
+capabilities:
+  # 2.5 uses the older integer thinking_budget, not thinking_level.
+  # 0 is a genuine disable on 2.5-flash; -1 is dynamic (full thinking).
+  reasoning:
+    style: thinking_budget
+    off_value: 0
+    on_value: -1
+    true_off: true

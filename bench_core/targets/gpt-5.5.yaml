@@ -1,0 +1,5 @@
+name: gpt-5.5
+provider: openai
+model_id: gpt-5.5
+# OpenAI defaults fit: reasoning_effort with "none" a true off; temperature is
+# omitted automatically when reasoning is engaged.

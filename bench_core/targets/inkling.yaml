@@ -1,0 +1,9 @@
+# A benchmark TARGET: everything needed to run any benchmark against one model.
+# Declare only what differs from the provider's defaults (see bench_core/config.py
+# PROVIDERS). Fireworks defaults already encode Inkling's traits: reasoning
+# effort with "none" as a FLOOR (still thinks), audio via audio_url, temperature
+# sent regardless. So nothing else is needed here.
+name: inkling
+provider: fireworks
+model_id: accounts/fireworks/models/inkling
+# ci_regression: true   # opt into the nightly regression matrix

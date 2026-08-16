@@ -1,0 +1,13 @@
+name: kimi-k2.6
+provider: openrouter
+model_id: moonshotai/kimi-k2.6
+capabilities:
+  # Pin to Moonshot's own inference (avoid reseller deployments) and disable
+  # reasoning via the enabled toggle.
+  reasoning:
+    extra:
+      toggle: enabled
+      provider_only: [moonshotai]
+    off_value: false
+    on_value: true
+    true_off: true

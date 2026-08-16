@@ -1,0 +1,5 @@
+name: gemini-3.7-flash
+provider: gemini
+model_id: gemini-3.7-flash
+# Gemini defaults fit: thinking_level with "low" as the floor (3.7 flash rejects
+# "minimal"), image/audio via native Parts.
