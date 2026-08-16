@@ -66,6 +66,4 @@ uv run -m benchmarks.spider2_lite.fetch_data
 - **`benchmark.yml`** — runs a benchmark: manual dispatch (pick target/benchmarks), weekly smoke of `ci_regression` targets, and a **full run on merge** of a `targets.yaml` change.
 - **`add-target.yml`** — a UI form to add a model that opens a PR (doesn't run anything).
 
-Add a model via the form or by editing `targets.yaml` in a PR; the benchmark
-runs **only once the PR is merged**. Needs the provider secrets + `HF_TOKEN` set
-in the repo. `olmocr` and `spider2` aren't in CI (heavy deps / ~4GB data).
+Add a model via the form or by editing `targets.yaml` in a PR; the benchmark runs **only once the PR is merged**. Needs the provider secrets + `HF_TOKEN` set in the repo. `olmocr` and `spider2` aren't in CI (heavy deps / ~4GB data).
