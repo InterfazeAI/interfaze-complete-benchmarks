@@ -79,6 +79,22 @@ METRICS_PATH = RESULTS_DIR / f"{TAG}_metrics.json"
 
 # Config ----------------------------------------------------------------------
 
+# Provider/model, set from the CLI. interfaze is the default so existing
+# invocations and output paths are unchanged.
+PROVIDER = "interfaze"
+MODEL = "interfaze-beta"
+
+# Per-query wall-clock cap during scoring — see execute_sqlite.
+QUERY_TIMEOUT_S = 120.0
+
+# reasoning.effort sent to OpenRouter-hosted models. Override per run.
+OPENROUTER_EFFORT = os.getenv("BENCH_OPENROUTER_EFFORT", "none")
+
+_GEMINI_CLIENT = None
+# Gemini thinking_level: "auto" = the model's floor (3.7 rejects minimal, so
+# "low"), or an explicit minimal|low|medium|high. Set from the CLI.
+GEMINI_LEVEL = "auto"
+
 REASONING_EFFORT = None
 TEMPERATURE = 0.0
 RATE_LIMIT = 8
@@ -107,6 +123,7 @@ Do not include any explanation before or after the code block."""
 # -----------------------------------------------------------------------------
 # Utilities shared with other benches
 # -----------------------------------------------------------------------------
+
 
 class RateLimiter:
     def __init__(self, rate: int):
@@ -146,6 +163,7 @@ class JsonlWriter:
 # -----------------------------------------------------------------------------
 # Dataset loading
 # -----------------------------------------------------------------------------
+
 
 def load_local_examples() -> list[dict]:
     if not ALL_EXAMPLES.exists():
@@ -205,6 +223,12 @@ def build_prompt(example: dict) -> str:
 
 _SQL_FENCE = re.compile(r"```sql\s*\n(.*?)```", re.IGNORECASE | re.DOTALL)
 _ANY_FENCE = re.compile(r"```\s*\n?(.*?)```", re.DOTALL)
+# Unclosed fence: an opener with no terminator. Some models (deepseek-v4-flash
+# on 57/135 Spider2 examples) emit complete SQL ending in ';' but never close
+# the block. Without this, the whole response — opening fence included — was
+# handed to sqlite as SQL and failed with `unrecognized token: "```sql`,
+# scoring a valid query as wrong.
+_OPEN_FENCE = re.compile(r"```(?:sql)?[ \t]*\r?\n(.*)\Z", re.IGNORECASE | re.DOTALL)
 
 
 def extract_sql(text: str) -> str:
@@ -219,12 +243,16 @@ def extract_sql(text: str) -> str:
     m = _ANY_FENCE.search(text)
     if m:
         return m.group(1).strip()
+    m = _OPEN_FENCE.search(text)
+    if m:
+        return m.group(1).strip()
     return text.strip()
 
 
 # -----------------------------------------------------------------------------
 # Checkpoint helpers
 # -----------------------------------------------------------------------------
+
 
 def load_completed_ids(path: Path) -> set[str]:
     if not path.exists():
@@ -265,8 +293,82 @@ def load_records(path: Path) -> list[dict]:
 # Prediction
 # -----------------------------------------------------------------------------
 
-async def process_example(example: dict, rate_limiter: RateLimiter,
-                          writer: JsonlWriter, progress: dict) -> dict | None:
+
+def invoke_model(messages: list[dict]):
+    """Dispatch to the configured provider — both endpoints are OpenAI-shaped.
+
+    Inkling always thinks: reasoning_effort="none" is its floor, so a Fireworks
+    run is not directly comparable to the interfaze reasoning-off run."""
+    if PROVIDER == "gemini":
+        # google-genai returns resp.text, but every caller here expects an
+        # OpenAI-shaped object, so wrap it rather than special-casing downstream.
+        from google import genai
+        from google.genai import types
+
+        key = (
+            os.getenv("GEMINI_API_KEY")
+            or os.getenv("GEMINI_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+        )
+        if not key:
+            raise ValueError("GEMINI_API_KEY missing from .env")
+        if GEMINI_LEVEL != "auto":
+            level = GEMINI_LEVEL
+        elif any(v in MODEL.lower() for v in ("3.7", "3.8", "3.9", "4.", "pro")):
+            level = "low"
+        else:
+            level = "minimal"
+        # Cache the client: constructing one per call gets it garbage-collected
+        # mid-flight ("Cannot send a request, as the client has been closed").
+        global _GEMINI_CLIENT
+        if _GEMINI_CLIENT is None:
+            _GEMINI_CLIENT = genai.Client(api_key=key)
+        resp = _GEMINI_CLIENT.models.generate_content(
+            model=MODEL,
+            contents=[messages[0]["content"]],
+            config=types.GenerateContentConfig(
+                temperature=TEMPERATURE,
+                thinking_config=types.ThinkingConfig(thinking_level=level),
+            ),
+        )
+
+        class _Shim:
+            def __init__(self, text, rid):
+                self.choices = [
+                    type("C", (), {"message": type("M", (), {"content": text})()})()
+                ]
+                self.id = rid
+
+        return _Shim(resp.text or "", getattr(resp, "response_id", "") or "")
+    if PROVIDER == "openrouter":
+        from src.commons_openrouter import invoke_openrouter
+
+        return invoke_openrouter(
+            messages,
+            model=MODEL,
+            temperature=TEMPERATURE,
+            extra_body={"reasoning": {"effort": OPENROUTER_EFFORT}},
+        )
+    if PROVIDER == "fireworks":
+        from src.commons_fireworks import invoke_fireworks
+
+        return invoke_fireworks(
+            messages,
+            model=MODEL,
+            reasoning_effort="none",
+            temperature=TEMPERATURE,
+        )
+    return invoke_interfaze(
+        messages,
+        model=MODEL,
+        reasoning_effort=REASONING_EFFORT,
+        temperature=TEMPERATURE,
+    )
+
+
+async def process_example(
+    example: dict, rate_limiter: RateLimiter, writer: JsonlWriter, progress: dict
+) -> dict | None:
     instance_id = example["instance_id"]
     prompt = build_prompt(example)
     messages = [{"role": "user", "content": prompt}]
@@ -276,12 +378,7 @@ async def process_example(example: dict, rate_limiter: RateLimiter,
         await rate_limiter.acquire()
         start = time.perf_counter()
         try:
-            response = await asyncio.to_thread(
-                invoke_interfaze,
-                messages,
-                reasoning_effort=REASONING_EFFORT,
-                temperature=TEMPERATURE,
-            )
+            response = await asyncio.to_thread(invoke_model, messages)
             latency_ms = int((time.perf_counter() - start) * 1000)
             content = (response.choices[0].message.content or "").strip()
             request_id = getattr(response, "id", None)
@@ -337,8 +434,10 @@ async def run_prediction(examples: list[dict], limit: int | None):
     if limit is not None:
         pending = pending[:limit]
         print(f"--limit applied: will run at most {limit} example(s)")
-    print(f"Resume: {len(done_ids)} already completed, {len(pending)} remaining "
-          f"(checkpoint: {RESPONSES_PATH})")
+    print(
+        f"Resume: {len(done_ids)} already completed, {len(pending)} remaining "
+        f"(checkpoint: {RESPONSES_PATH})"
+    )
     if not pending:
         return
 
@@ -350,8 +449,10 @@ async def run_prediction(examples: list[dict], limit: int | None):
         await tqdm_asyncio.gather(*tasks, desc="spider2-lite/local")
     except Exception:
         traceback.print_exc()
-    print(f"\nPrediction finished: {progress['done']}/{progress['total']} answered, "
-          f"{progress['failed']} failed.")
+    print(
+        f"\nPrediction finished: {progress['done']}/{progress['total']} answered, "
+        f"{progress['failed']} failed."
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -361,6 +462,7 @@ async def run_prediction(examples: list[dict], limit: int | None):
 # original semantics (column-vector matching, float tolerance of 1e-2,
 # condition_cols / ignore_order flags, multi-gold).
 # -----------------------------------------------------------------------------
+
 
 def _normalize(v):
     return 0 if pd.isna(v) else v
@@ -389,8 +491,9 @@ def _vectors_match(v1, v2, ignore_order: bool, tol: float = 1e-2) -> bool:
     return True
 
 
-def compare_table(pred: pd.DataFrame, gold: pd.DataFrame,
-                  condition_cols, ignore_order: bool) -> int:
+def compare_table(
+    pred: pd.DataFrame, gold: pd.DataFrame, condition_cols, ignore_order: bool
+) -> int:
     if condition_cols:
         if not isinstance(condition_cols, (list, tuple)):
             condition_cols = [condition_cols]
@@ -405,8 +508,12 @@ def compare_table(pred: pd.DataFrame, gold: pd.DataFrame,
     return 1
 
 
-def compare_multi(pred: pd.DataFrame, golds: list[pd.DataFrame],
-                  multi_condition_cols, ignore_order: bool) -> int:
+def compare_multi(
+    pred: pd.DataFrame,
+    golds: list[pd.DataFrame],
+    multi_condition_cols,
+    ignore_order: bool,
+) -> int:
     if not golds:
         return 0
     if multi_condition_cols in (None, [], [[]], [None]):
@@ -437,13 +544,26 @@ def execute_sqlite(db_path: Path, sql: str) -> tuple[bool, pd.DataFrame | str]:
 
     We copy the on-disk DB into :memory: (same pattern as the official
     evaluate.py) — faster for repeated queries and isolates writes.
+
+    Queries are capped at QUERY_TIMEOUT_S. A model can emit SQL that never
+    finishes (an unbounded cross join is the usual culprit), and without a cap
+    that single example hangs the whole scoring pass at 100% CPU. A query that
+    can't complete in the budget is scored as a failed execution, which is what
+    the official evaluate.py's func_timeout does too.
     """
     try:
         disk = sqlite3.connect(str(db_path))
         mem = sqlite3.connect(":memory:")
         try:
             disk.backup(mem)
+            deadline = time.monotonic() + QUERY_TIMEOUT_S
+            # Called every N VM instructions; non-zero aborts the query, which
+            # surfaces as sqlite3.OperationalError('interrupted').
+            mem.set_progress_handler(
+                lambda: 1 if time.monotonic() > deadline else 0, 10_000
+            )
             df = pd.read_sql_query(sql, mem)
+            mem.set_progress_handler(None, 0)
             return True, df
         finally:
             mem.close()
@@ -473,7 +593,8 @@ def evaluate_record(record: dict, eval_std: dict) -> dict:
     db_path = SQLITE_DB_DIR / f"{record['db']}.sqlite"
     if not db_path.exists():
         return {
-            "instance_id": instance_id, "score": 0,
+            "instance_id": instance_id,
+            "score": 0,
             "error": f"missing sqlite db: {db_path}",
         }
     pred_sql = record.get("pred_sql") or ""
@@ -513,6 +634,20 @@ def run_evaluation(total_local: int) -> None:
         sys.exit(1)
     eval_std = load_eval_standard()
 
+    # Re-derive SQL from the stored response so --evaluate-only picks up
+    # extractor fixes without paying for new predictions (same convention as
+    # the mmmlu/gpqa runners re-running their answer parsers).
+    n_rewritten = 0
+    for rec in records:
+        if not rec.get("response"):
+            continue
+        fresh = extract_sql(rec["response"])
+        if fresh and fresh != rec.get("pred_sql"):
+            rec["pred_sql"] = fresh
+            n_rewritten += 1
+    if n_rewritten:
+        print(f"Re-extracted SQL for {n_rewritten} record(s) with the current parser.")
+
     results: list[dict] = []
     for rec in tqdm(records, desc="Evaluating"):
         res = evaluate_record(rec, eval_std)
@@ -527,7 +662,9 @@ def run_evaluation(total_local: int) -> None:
     accuracy_of_subset = correct / total_local if total_local else 0.0
 
     print(f"\n{'=' * 60}")
-    print(f"Spider 2.0-Lite — SQLite subset (Interfaze, reasoning={REASONING_EFFORT})")
+    print(
+        f"Spider 2.0-Lite — SQLite subset ({PROVIDER}/{MODEL}, reasoning={REASONING_EFFORT})"
+    )
     print(f"{'=' * 60}")
     print(f"Correct                : {correct}/{total}")
     print(f"Accuracy (of predicted): {accuracy_of_evaluated:.4f}")
@@ -552,7 +689,9 @@ def run_evaluation(total_local: int) -> None:
         "total_local_subset": total_local,
         "subset": "local (SQLite)",
         "benchmark": "Spider 2.0-Lite",
-        "reasoning_effort": REASONING_EFFORT,
+        "provider": PROVIDER,
+        "model": MODEL,
+        "reasoning_effort": "none" if PROVIDER == "fireworks" else REASONING_EFFORT,
         "temperature": TEMPERATURE,
         "per_example": results,
     }
@@ -566,13 +705,62 @@ def run_evaluation(total_local: int) -> None:
 # Entrypoint
 # -----------------------------------------------------------------------------
 
+
+def set_paths() -> None:
+    """Per provider+model output paths so runs don't share a checkpoint. The
+    interfaze default keeps the original `spider2_lite_local` tag."""
+    global TAG, RESPONSES_PATH, PRED_SQL_DIR, METRICS_PATH
+    if PROVIDER != "interfaze":
+        slug = re.sub(r"[^a-z0-9]+", "-", MODEL.rsplit("/", 1)[-1].lower()).strip("-")
+        TAG = f"spider2_lite_local_{PROVIDER}_{slug}"
+        if GEMINI_LEVEL != "auto":
+            TAG += f"_thinking{GEMINI_LEVEL}"
+    RESPONSES_PATH = RESULTS_DIR / f"{TAG}_responses.jsonl"
+    PRED_SQL_DIR = RESULTS_DIR / f"{TAG}_sql"
+    METRICS_PATH = RESULTS_DIR / f"{TAG}_metrics.json"
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Spider 2.0-Lite SQLite subset (Interfaze)")
+    global PROVIDER, MODEL, GEMINI_LEVEL
+    parser = argparse.ArgumentParser(
+        description="Spider 2.0-Lite SQLite subset (Interfaze or Fireworks)"
+    )
+    parser.add_argument(
+        "--provider", default="interfaze", choices=["interfaze", "fireworks", "openrouter", "gemini"]
+    )
+    parser.add_argument(
+        "--thinking-level",
+        default="auto",
+        choices=["auto", "minimal", "low", "medium", "high"],
+        help="Gemini thinking_level; auto = the model's floor. Non-auto values "
+        "get their own output tag so a floor run is never overwritten.",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model id. Defaults to interfaze-beta, or Inkling for --provider fireworks.",
+    )
     parser.add_argument("--predict-only", action="store_true")
     parser.add_argument("--evaluate-only", action="store_true")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Only predict the first N pending examples")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Only predict the first N pending examples",
+    )
     args = parser.parse_args()
+
+    PROVIDER = args.provider
+    GEMINI_LEVEL = args.thinking_level
+    if args.model:
+        MODEL = args.model
+    elif PROVIDER == "fireworks":
+        MODEL = "accounts/fireworks/models/inkling"
+    elif PROVIDER == "openrouter":
+        MODEL = "thinkingmachines/inkling-small"
+    elif PROVIDER == "gemini":
+        MODEL = "gemini-3.7-flash"
+    set_paths()
 
     examples = load_local_examples()
     print(f"Loaded {len(examples)} local (SQLite) examples from {ALL_EXAMPLES.name}")

@@ -79,6 +79,28 @@ DEFAULT_TEMPERATURE = 0.0
 RATE_LIMIT = 25
 MAX_RETRIES = 3
 
+# Cap on requests in flight. RATE_LIMIT bounds how many requests *start* per
+# second but not how many are outstanding: gather() launches every pending
+# sample at once, so hundreds pile up, queue server-side, and eventually 429
+# after tens of minutes of latency. Override with BENCH_MAX_IN_FLIGHT.
+MAX_IN_FLIGHT = int(os.getenv("BENCH_MAX_IN_FLIGHT", "8"))
+
+def _gemini_floor(model: str) -> str:
+    """Lowest thinking_level the given Gemini model actually accepts.
+
+    gemini-3.7+ flash rejects MINIMAL server-side ("Thinking level MINIMAL is
+    not supported for this model"), and the SDK enum has no "off"/"none", so
+    "low" is its true floor. Older 3.x flash models still take "minimal".
+    BENCH_GEMINI_FLOOR overrides for anything not covered here.
+    """
+    override = os.getenv("BENCH_GEMINI_FLOOR")
+    if override:
+        return override
+    m = model.lower()
+    if any(v in m for v in ("3.7", "3.8", "3.9", "4.")):
+        return "low"
+    return "minimal"
+
 ANTHROPIC_OFF_MAX_TOKENS = 1024
 ANTHROPIC_HIGH_BUDGET_TOKENS = 10_000
 ANTHROPIC_HIGH_MAX_TOKENS = 16_000
@@ -93,6 +115,7 @@ LETTERS_10 = list("ABCDEFGHIJ")
 # ---------------------------------------------------------------------------
 # IO helpers
 # ---------------------------------------------------------------------------
+
 
 class JsonlWriter:
     def __init__(self, path: Path):
@@ -168,6 +191,7 @@ def load_records(path: Path) -> list[dict]:
 # Dataset / sample building
 # ---------------------------------------------------------------------------
 
+
 def parse_options(raw: str) -> list[str]:
     """`options` is a stringified Python list. Use literal_eval (safe)."""
     if isinstance(raw, list):
@@ -220,6 +244,7 @@ def load_samples(setting: str, limit: int | None) -> list[dict]:
 # Image preprocessing
 # ---------------------------------------------------------------------------
 
+
 def image_to_jpeg_bytes(image: Image.Image) -> bytes:
     if image.mode != "RGB":
         image = image.convert("RGB")
@@ -236,6 +261,7 @@ def image_to_jpeg_bytes(image: Image.Image) -> bytes:
 # Prompt construction
 # ---------------------------------------------------------------------------
 
+
 def build_options_block(options: list[str]) -> str:
     lines = []
     for letter, opt in zip(LETTERS_10, options):
@@ -245,7 +271,7 @@ def build_options_block(options: list[str]) -> str:
 
 PROMPT_STANDARD = (
     "Answer the following multiple-choice question. The question may reference "
-    "images via tags like \"<image 1>\", \"<image 2>\". The corresponding images "
+    'images via tags like "<image 1>", "<image 2>". The corresponding images '
     "are attached in order.\n\n"
     "Respond with ONLY a single letter (A through J) corresponding to the correct "
     "option. Do not explain.\n\n"
@@ -289,6 +315,7 @@ def parse_answer(text: str) -> str | None:
 # Provider adapters
 # ---------------------------------------------------------------------------
 
+
 def _safe_int(x):
     try:
         return int(x) if x is not None else None
@@ -302,6 +329,9 @@ def _openai_usage(resp) -> dict:
         return {"input_tokens": None, "output_tokens": None, "reasoning_tokens": None}
     details = getattr(u, "completion_tokens_details", None)
     rt = getattr(details, "reasoning_tokens", None) if details else None
+    if rt is None:
+        # Fireworks reports it at the top level of `usage` for Inkling.
+        rt = getattr(u, "reasoning_tokens", None)
     return {
         "input_tokens": _safe_int(getattr(u, "prompt_tokens", None)),
         "output_tokens": _safe_int(getattr(u, "completion_tokens", None)),
@@ -351,10 +381,12 @@ def _openai_style_content(prompt: str, images: list[Image.Image]) -> list[dict]:
     content: list[dict] = [{"type": "text", "text": prompt}]
     for img in images:
         b64 = base64.b64encode(image_to_jpeg_bytes(img)).decode("utf-8")
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
-        })
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+            }
+        )
     return content
 
 
@@ -398,10 +430,12 @@ def call_anthropic(sample: dict, model: str, client) -> tuple[str, str | None, d
     parts: list[dict] = []
     for img in _images_for_sample(sample):
         b64 = base64.b64encode(image_to_jpeg_bytes(img)).decode("utf-8")
-        parts.append({
-            "type": "image",
-            "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
-        })
+        parts.append(
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
+            }
+        )
     parts.append({"type": "text", "text": prompt})
     kwargs = {
         "model": model,
@@ -412,7 +446,10 @@ def call_anthropic(sample: dict, model: str, client) -> tuple[str, str | None, d
         kwargs["temperature"] = DEFAULT_TEMPERATURE
         kwargs["max_tokens"] = ANTHROPIC_OFF_MAX_TOKENS
     else:
-        kwargs["thinking"] = {"type": "enabled", "budget_tokens": ANTHROPIC_HIGH_BUDGET_TOKENS}
+        kwargs["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": ANTHROPIC_HIGH_BUDGET_TOKENS,
+        }
         kwargs["max_tokens"] = ANTHROPIC_HIGH_MAX_TOKENS
     resp = client.messages.create(**kwargs)
     text_parts = [b.text for b in resp.content if getattr(b, "type", None) == "text"]
@@ -427,6 +464,12 @@ def _openrouter_extra_body(model: str) -> dict:
         if REASONING_MODE == "off":
             return {"reasoning": {"effort": "minimal"}}
         return {"reasoning": {"enabled": True}}
+    if m.startswith("google/"):
+        # Gemini rejects reasoning.enabled=false outright ("Reasoning is
+        # mandatory for this endpoint and cannot be disabled"), so "off" maps to
+        # its real floor: effort=minimal, measured at 0 reasoning tokens. This
+        # matches what call_gemini does natively (thinking_level="minimal").
+        return {"reasoning": {"effort": "minimal" if REASONING_MODE == "off" else "high"}}
     if m.startswith("moonshotai/"):
         body = {"reasoning": {"enabled": REASONING_MODE != "off"}}
         body["provider"] = {"only": ["moonshotai"]}
@@ -451,8 +494,28 @@ def call_openrouter(sample: dict, model: str, client) -> tuple[str, str | None, 
     )
 
 
+def call_fireworks(sample: dict, model: str, client) -> tuple[str, str | None, dict]:
+    """Fireworks-hosted models (Inkling). Images go in as OpenAI-shaped
+    image_url data URLs. Inkling always thinks — "none" is the reasoning floor,
+    not a true off; per-sample reasoning_tokens are recorded so the actual
+    thinking spend is auditable."""
+    content = _openai_style_content(_build_prompt(sample), _images_for_sample(sample))
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": content}],
+        temperature=DEFAULT_TEMPERATURE,
+        reasoning_effort="none" if REASONING_MODE == "off" else "high",
+    )
+    return (
+        (resp.choices[0].message.content or "").strip(),
+        getattr(resp, "id", None),
+        _openai_usage(resp),
+    )
+
+
 def call_gemini(sample: dict, model: str, client) -> tuple[str, str | None, dict]:
     from google.genai import types
+
     prompt = _build_prompt(sample)
     m = model.lower()
     if REASONING_MODE == "off":
@@ -463,7 +526,7 @@ def call_gemini(sample: dict, model: str, client) -> tuple[str, str | None, dict
         elif "pro" in m:
             thinking = types.ThinkingConfig(thinking_level="low")
         else:
-            thinking = types.ThinkingConfig(thinking_level="minimal")
+            thinking = types.ThinkingConfig(thinking_level=_gemini_floor(model))
     else:
         if m.startswith("gemini-2.5"):
             thinking = types.ThinkingConfig(thinking_budget=-1)
@@ -475,9 +538,9 @@ def call_gemini(sample: dict, model: str, client) -> tuple[str, str | None, dict
     )
     contents: list = []
     for img in _images_for_sample(sample):
-        contents.append(types.Part.from_bytes(
-            data=image_to_jpeg_bytes(img), mime_type="image/jpeg"
-        ))
+        contents.append(
+            types.Part.from_bytes(data=image_to_jpeg_bytes(img), mime_type="image/jpeg")
+        )
     contents.append(prompt)
     resp = client.models.generate_content(model=model, contents=contents, config=config)
     return (
@@ -490,34 +553,55 @@ def call_gemini(sample: dict, model: str, client) -> tuple[str, str | None, dict
 def build_client(provider: str):
     if provider == "interfaze":
         from openai import OpenAI
+
         api_key = os.getenv("INTERFAZE_API_KEY")
         if not api_key:
             raise RuntimeError("INTERFAZE_API_KEY missing")
         return OpenAI(base_url="https://api.interfaze.ai/v1", api_key=api_key)
     if provider == "openai":
         from openai import OpenAI
+
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY missing")
         return OpenAI(base_url="https://api.openai.com/v1", api_key=api_key)
     if provider == "anthropic":
         from anthropic import Anthropic
+
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY missing")
         return Anthropic(api_key=api_key)
     if provider == "gemini":
         from google import genai
-        api_key = os.getenv("GEMINI_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+        api_key = (
+            os.getenv("GEMINI_KEY")
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+        )
         if not api_key:
             raise RuntimeError("GEMINI_KEY missing")
         return genai.Client(api_key=api_key)
     if provider == "openrouter":
         from openai import OpenAI
-        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_KEY")
+
+        api_key = (
+            os.getenv("OPENROUTER_API_KEY")
+            or os.getenv("openrouter_api_key")
+            or os.getenv("OPENROUTER_KEY")
+        )
         if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY missing")
         return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+    if provider == "fireworks":
+        from openai import OpenAI
+
+        # .env in this repo may spell the key lowercase; accept either casing.
+        api_key = os.getenv("FIREWORKS_API_KEY") or os.getenv("fireworks_api_key")
+        if not api_key:
+            raise RuntimeError("FIREWORKS_API_KEY missing")
+        return OpenAI(base_url="https://api.fireworks.ai/inference/v1", api_key=api_key)
     raise ValueError(f"unknown provider: {provider}")
 
 
@@ -528,6 +612,7 @@ def get_call_fn(provider: str):
         "anthropic": call_anthropic,
         "gemini": call_gemini,
         "openrouter": call_openrouter,
+        "fireworks": call_fireworks,
     }[provider]
 
 
@@ -539,16 +624,26 @@ def model_slug(model: str) -> str:
 # Pipeline
 # ---------------------------------------------------------------------------
 
-async def process_sample(sample: dict, call_fn, model: str, rate_limiter: RateLimiter,
-                         writer: JsonlWriter, progress: dict, provider: str,
-                         client) -> dict | None:
+
+async def process_sample(
+    sample: dict,
+    call_fn,
+    model: str,
+    rate_limiter: RateLimiter,
+    writer: JsonlWriter,
+    progress: dict,
+    provider: str,
+    client,
+) -> dict | None:
     last_error: str | None = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         await rate_limiter.acquire()
         start = time.perf_counter()
         try:
-            content, request_id, usage = await asyncio.to_thread(call_fn, sample, model, client)
+            content, request_id, usage = await asyncio.to_thread(
+                call_fn, sample, model, client
+            )
             latency_ms = int((time.perf_counter() - start) * 1000)
             if not content:
                 last_error = "empty response content"
@@ -604,29 +699,48 @@ async def process_sample(sample: dict, call_fn, model: str, rate_limiter: RateLi
                 await asyncio.sleep(2 ** (attempt - 1))
 
     progress["failed"] += 1
-    tqdm.write(f"[{provider}/{model} FAILED] id={sample['id']} after {MAX_RETRIES} attempts: {last_error}")
+    tqdm.write(
+        f"[{provider}/{model} FAILED] id={sample['id']} after {MAX_RETRIES} attempts: {last_error}"
+    )
     return None
 
 
-async def run(provider: str, model: str, setting: str, pred_path: Path, limit: int | None):
+async def run(
+    provider: str, model: str, setting: str, pred_path: Path, limit: int | None
+):
     client = build_client(provider)
     call_fn = get_call_fn(provider)
 
     samples = load_samples(setting, limit)
     done_ids = load_completed_ids(pred_path)
     pending = [s for s in samples if s["id"] not in done_ids]
-    print(f"[{provider}/{model} {setting}] Total: {len(samples)}, "
-          f"resume: {len(done_ids)} done / {len(pending)} pending "
-          f"(checkpoint: {pred_path})")
+    print(
+        f"[{provider}/{model} {setting}] Total: {len(samples)}, "
+        f"resume: {len(done_ids)} done / {len(pending)} pending "
+        f"(checkpoint: {pred_path})"
+    )
     if not pending:
         return
 
     writer = JsonlWriter(pred_path)
     rate_limiter = RateLimiter(RATE_LIMIT)
-    progress = {"total": len(pending), "done": 0, "correct": 0, "unparseable": 0, "failed": 0}
+    progress = {
+        "total": len(pending),
+        "done": 0,
+        "correct": 0,
+        "unparseable": 0,
+        "failed": 0,
+    }
 
-    tasks = [process_sample(s, call_fn, model, rate_limiter, writer, progress, provider, client)
-             for s in pending]
+    sem = asyncio.Semaphore(MAX_IN_FLIGHT)
+
+    async def bounded(sample):
+        async with sem:
+            return await process_sample(
+                sample, call_fn, model, rate_limiter, writer, progress, provider, client
+            )
+
+    tasks = [bounded(s) for s in pending]
     try:
         await tqdm_asyncio.gather(*tasks, desc=f"{provider}/{model}/{setting}")
     except Exception:
@@ -644,6 +758,7 @@ async def run(provider: str, model: str, setting: str, pred_path: Path, limit: i
 # ---------------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------------
+
 
 def compute_metrics(results: list[dict]) -> dict:
     if not results:
@@ -672,7 +787,9 @@ def compute_metrics(results: list[dict]) -> dict:
         c = sum(1 for r in rows if r.get("correct"))
         per_difficulty[diff] = {"n": n, "accuracy": c / n if n else 0.0}
 
-    latencies = [r["latency_ms"] for r in results if isinstance(r.get("latency_ms"), int)]
+    latencies = [
+        r["latency_ms"] for r in results if isinstance(r.get("latency_ms"), int)
+    ]
     latency_stats = {}
     if latencies:
         lats = sorted(latencies)
@@ -698,18 +815,24 @@ def compute_metrics(results: list[dict]) -> dict:
 
 def print_summary(metrics: dict, setting: str, provider: str, model: str):
     print(f"\n{'=' * 68}")
-    print(f"MMMU Pro [{setting}] — {provider}/{model} (reasoning={REASONING_MODE}, temp={DEFAULT_TEMPERATURE})")
+    print(
+        f"MMMU Pro [{setting}] — {provider}/{model} (reasoning={REASONING_MODE}, temp={DEFAULT_TEMPERATURE})"
+    )
     print(f"{'=' * 68}")
     print(f"Samples              : {metrics['num_samples']}")
     print(f"Accuracy             : {metrics['accuracy']:.4f}")
     print(f"Unparseable          : {metrics['unparseable']}")
     if metrics.get("latency"):
         lat = metrics["latency"]
-        print(f"Latency              : mean={lat['mean_ms']:.0f}ms p50={lat['p50_ms']}ms "
-              f"p90={lat['p90_ms']}ms p99={lat['p99_ms']}ms")
+        print(
+            f"Latency              : mean={lat['mean_ms']:.0f}ms p50={lat['p50_ms']}ms "
+            f"p90={lat['p90_ms']}ms p99={lat['p99_ms']}ms"
+        )
 
 
-def run_evaluation(pred_path: Path, metrics_path: Path, provider: str, model: str, setting: str):
+def run_evaluation(
+    pred_path: Path, metrics_path: Path, provider: str, model: str, setting: str
+):
     if not pred_path.exists():
         print(f"No predictions found at {pred_path}")
         return
@@ -746,13 +869,24 @@ def run_evaluation(pred_path: Path, metrics_path: Path, provider: str, model: st
 def main():
     global REASONING_MODE
     parser = argparse.ArgumentParser(description="MMMU Pro multi-provider runner")
-    parser.add_argument("--provider", required=True,
-                        choices=["interfaze", "openai", "anthropic", "gemini", "openrouter"])
+    parser.add_argument(
+        "--provider",
+        required=True,
+        choices=[
+            "interfaze",
+            "openai",
+            "anthropic",
+            "gemini",
+            "openrouter",
+            "fireworks",
+        ],
+    )
     parser.add_argument("--model", required=True)
     parser.add_argument("--setting", required=True, choices=list(SETTINGS.keys()))
     parser.add_argument("--reasoning", default="off", choices=["off", "high"])
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Cap samples (smoke test)")
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Cap samples (smoke test)"
+    )
     parser.add_argument("--predict-only", action="store_true")
     parser.add_argument("--evaluate-only", action="store_true")
     args = parser.parse_args()
@@ -765,9 +899,13 @@ def main():
     if args.evaluate_only:
         run_evaluation(pred_path, metrics_path, args.provider, args.model, args.setting)
     elif args.predict_only:
-        asyncio.run(run(args.provider, args.model, args.setting, pred_path, limit=args.limit))
+        asyncio.run(
+            run(args.provider, args.model, args.setting, pred_path, limit=args.limit)
+        )
     else:
-        asyncio.run(run(args.provider, args.model, args.setting, pred_path, limit=args.limit))
+        asyncio.run(
+            run(args.provider, args.model, args.setting, pred_path, limit=args.limit)
+        )
         run_evaluation(pred_path, metrics_path, args.provider, args.model, args.setting)
 
 

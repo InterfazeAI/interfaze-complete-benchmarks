@@ -34,17 +34,18 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from benchmarks.obj_detection.refcoco import (  # noqa: E402
-    compute_iou, compute_metrics,
+    compute_iou,
+    compute_metrics,
 )
 
 RESULTS_DIR = PROJECT_ROOT / "results"
 TUPLE_PATTERN = re.compile(
-    r'\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*'
-    r'(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]'
+    r"\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*"
+    r"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]"
 )
 PAREN_PAIRS = re.compile(
-    r'\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)\s*[^()]*?\s*'
-    r'\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)'
+    r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)\s*[^()]*?\s*"
+    r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)"
 )
 TLBR_JSON = re.compile(
     r'"top_left"\s*:\s*\{[^}]*?"x"\s*:\s*(-?\d+(?:\.\d+)?)[^}]*?"y"\s*:\s*'
@@ -72,14 +73,33 @@ def extract_tuples(text: str) -> list[tuple[float, float, float, float]]:
 def all_interpretations(nums, w, h):
     """Yield (label, [x1,y1,x2,y2]) for every plausible interpretation
     of a 4-tuple under the canonical RefCOCO eval — covers xyxy/yxyx
-    order × {raw pixel, 0-1000 normalized, 0-1.0 float} scale."""
+    order × {raw pixel, 2x-upscaled pixel, 0-1000 normalized, 0-1.0 float}
+    scale.
+
+    The 2x-pixel family covers models that report coordinates in their own
+    internally-upscaled image space rather than the sent image's — Inkling
+    does this for images below its vision encoder's working resolution
+    (verified: a box at 50-75% of a 640x428 input comes back as
+    [500, 210, 750, 430], i.e. that region in 1280x856 space). Applied to
+    every model uniformly, like every other hypothesis here."""
     n0, n1, n2, n3 = nums
     mx = max(abs(c) for c in nums)
     yield "pixel-xyxy", [n0, n1, n2, n3]
     yield "pixel-yxyx", [n1, n0, n3, n2]
+    # Only worth trying when the tuple overflows the image — otherwise it is
+    # just a shrunken duplicate of the pixel hypothesis.
+    if mx > min(w, h):
+        yield "pixel2x-xyxy", [n0 / 2, n1 / 2, n2 / 2, n3 / 2]
+        yield "pixel2x-yxyx", [n1 / 2, n0 / 2, n3 / 2, n2 / 2]
     if mx <= 1000:
-        yield "norm1000-xyxy", [n0 * w / 1000, n1 * h / 1000, n2 * w / 1000, n3 * h / 1000]
-        yield "norm1000-yxyx", [n1 * w / 1000, n0 * h / 1000, n3 * w / 1000, n2 * h / 1000]
+        yield (
+            "norm1000-xyxy",
+            [n0 * w / 1000, n1 * h / 1000, n2 * w / 1000, n3 * h / 1000],
+        )
+        yield (
+            "norm1000-yxyx",
+            [n1 * w / 1000, n0 * h / 1000, n3 * w / 1000, n2 * h / 1000],
+        )
     if mx <= 1.0:
         yield "norm1-xyxy", [n0 * w, n1 * h, n2 * w, n3 * h]
         yield "norm1-yxyx", [n1 * w, n0 * h, n3 * w, n2 * h]
@@ -133,13 +153,35 @@ def write_records(records: list[dict], path: Path) -> None:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
+def discover_targets() -> list[tuple[str, str]]:
+    """Every RefCOCO response file in results/ — identified by the grounding
+    fields rather than a filename convention, since the per-provider runners
+    tag their outputs differently. Skips this script's own oracle outputs."""
+    targets = []
+    for path in sorted(RESULTS_DIR.glob("*_responses.jsonl")):
+        if "_oracle_" in path.name:
+            continue
+        try:
+            with open(path) as f:
+                first = json.loads(f.readline() or "{}")
+        except (json.JSONDecodeError, OSError):
+            continue
+        if "gt_bbox_xyxy" not in first:
+            continue
+        tag = path.name[: -len("_responses.jsonl")]
+        label = first.get("model") or first.get("provider") or tag
+        targets.append((label, tag))
+    return targets
+
+
 def main():
-    targets = [
-        ("interfaze", "refcoco_testA"),
-        ("gpt-5.5",   "gpt55_refcoco_testA"),
-        ("kimi-k2.6", "kimi_k26_refcoco_testA"),
-    ]
-    print(f"{'model':<14} {'orig_acc':>10} {'oracle_acc':>11} {'mean_iou':>10} {'changed':>9}")
+    targets = discover_targets()
+    if not targets:
+        print(f"No RefCOCO response files found in {RESULTS_DIR}")
+        return
+    print(
+        f"{'model':<14} {'orig_acc':>10} {'oracle_acc':>11} {'mean_iou':>10} {'changed':>9}"
+    )
     print("-" * 60)
     for label, tag in targets:
         src = RESULTS_DIR / f"{tag}_responses.jsonl"
@@ -164,10 +206,14 @@ def main():
         with open(out_metrics, "w") as f:
             json.dump(metrics, f, indent=2)
 
-        print(f"{label:<14} {orig_correct/orig_total:>10.4f} "
-              f"{metrics['accuracy']:>11.4f} {metrics['mean_iou']:>10.4f} "
-              f"{info['n_changed']:>9d}")
-        print(f"  interpretations used: {dict(sorted(info['label_counts'].items(), key=lambda x: -x[1]))}")
+        print(
+            f"{label:<14} {orig_correct / orig_total:>10.4f} "
+            f"{metrics['accuracy']:>11.4f} {metrics['mean_iou']:>10.4f} "
+            f"{info['n_changed']:>9d}"
+        )
+        print(
+            f"  interpretations used: {dict(sorted(info['label_counts'].items(), key=lambda x: -x[1]))}"
+        )
 
 
 if __name__ == "__main__":

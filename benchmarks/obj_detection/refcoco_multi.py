@@ -17,6 +17,7 @@ Usage:
 Keys are loaded from ~/interfaze/.env.local (OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_KEY).
 """
 
+import os
 import sys
 import json
 import time
@@ -28,23 +29,35 @@ from io import BytesIO
 from pathlib import Path
 
 from datasets import load_dataset
+from dotenv import load_dotenv
 from tqdm import tqdm
 from tqdm.asyncio import tqdm_asyncio
+
+load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Reuse parsing/IoU from the interfaze script — guarantees identical scoring.
 from benchmarks.obj_detection.refcoco import (  # noqa: E402
-    parse_box, compute_iou, coco_bbox_to_xyxy,
-    JsonlWriter, build_samples, load_completed_ids, load_records,
-    compute_metrics, print_summary, PROMPT_TEMPLATE, IOU_THRESHOLD,
+    parse_box,
+    compute_iou,
+    coco_bbox_to_xyxy,
+    JsonlWriter,
+    build_samples,
+    load_completed_ids,
+    load_records,
+    compute_metrics,
+    print_summary,
+    PROMPT_TEMPLATE,
+    IOU_THRESHOLD,
 )
 
 
 class RateLimiter:
     """Simple async token-bucket. Local to this script — refcoco.py does not
     export one, so we don't try to import it."""
+
     def __init__(self, rate: int):
         self.rate = rate
         self.tokens = rate
@@ -63,18 +76,46 @@ class RateLimiter:
                     return
             await asyncio.sleep(1 / self.rate)
 
+
 RESULTS_DIR = PROJECT_ROOT / "results"
 DEFAULT_DATASET = "lmms-lab/RefCOCO"
 DEFAULT_SPLIT = "testA"
 RATE_LIMIT = 25
 MAX_RETRIES = 3
 
+# Cap on requests in flight. RATE_LIMIT bounds how many requests *start* per
+# second but not how many are outstanding: gather() launches every pending
+# sample at once, so hundreds pile up, queue server-side, and eventually 429
+# after tens of minutes of latency. Override with BENCH_MAX_IN_FLIGHT.
+MAX_IN_FLIGHT = int(os.getenv("BENCH_MAX_IN_FLIGHT", "8"))
+
+# reasoning.effort sent to OpenRouter-hosted models. Override per run.
+OPENROUTER_EFFORT = os.getenv("BENCH_OPENROUTER_EFFORT", "none")
+
+def _gemini_floor(model: str) -> str:
+    """Lowest thinking_level the given Gemini model actually accepts.
+
+    gemini-3.7+ flash rejects MINIMAL server-side ("Thinking level MINIMAL is
+    not supported for this model"), and the SDK enum has no "off"/"none", so
+    "low" is its true floor. Older 3.x flash models still take "minimal".
+    BENCH_GEMINI_FLOOR overrides for anything not covered here.
+    """
+    override = os.getenv("BENCH_GEMINI_FLOOR")
+    if override:
+        return override
+    m = model.lower()
+    if any(v in m for v in ("3.7", "3.8", "3.9", "4.")):
+        return "low"
+    return "minimal"
+
 
 def _load_interfaze_env() -> dict:
-    """Parse ~/interfaze/.env.local and return a dict of keys."""
+    """Parse ~/interfaze/.env.local and return a dict of keys. Optional — the
+    project .env (loaded above) is enough for providers keyed there, so a
+    missing file is not fatal."""
     path = Path.home() / "interfaze" / ".env.local"
     if not path.exists():
-        raise FileNotFoundError(f"Expected keys at {path}")
+        return {}
     env = {}
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -91,6 +132,7 @@ def _load_interfaze_env() -> dict:
 # --------------------------------------------------------------------------
 # Each adapter is a function: (image_pil, prompt, model) -> (content, request_id)
 # Runs synchronously inside asyncio.to_thread.
+
 
 def _image_to_jpeg_bytes(image, max_side: int = 1024) -> tuple[bytes, int, int]:
     if image.mode != "RGB":
@@ -118,13 +160,15 @@ def call_openai(image, prompt: str, model: str, client) -> tuple[str, str, int, 
     data_url = f"data:image/jpeg;base64,{b64}"
     kwargs = {
         "model": model,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": data_url}},
-            ],
-        }],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ],
     }
     if model.startswith("gpt-5") or model.startswith("o"):
         kwargs["reasoning_effort"] = "none"
@@ -142,17 +186,85 @@ def call_anthropic(image, prompt: str, model: str, client) -> tuple[str, str, in
         model=model,
         max_tokens=1024,
         thinking={"type": "disabled"},
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-                {"type": "text", "text": prompt},
-            ],
-        }],
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": b64,
+                        },
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
     )
     parts = [b.text for b in resp.content if getattr(b, "type", None) == "text"]
     content = "\n".join(parts).strip()
     return content, resp.id, w, h
+
+
+def call_openrouter(image, prompt: str, model: str, client) -> tuple[str, str, int, int]:
+    """OpenRouter-hosted VLMs. Reasoning is routed through extra_body, which is
+    OpenRouter's shape rather than the OpenAI `reasoning_effort` field.
+
+    NOTE for thinkingmachines/*: on OpenRouter effort="none" genuinely disables
+    thinking (0 reasoning tokens), whereas the same value on Fireworks is only a
+    floor and still emits hundreds. The two hosts are not interchangeable at the
+    same nominal setting — see README.
+    """
+    img_bytes, w, h = _image_to_jpeg_bytes(image)
+    b64 = base64.b64encode(img_bytes).decode("utf-8")
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                    },
+                ],
+            }
+        ],
+        temperature=0.0,
+        extra_body={"reasoning": {"effort": OPENROUTER_EFFORT}},
+    )
+    content = (resp.choices[0].message.content or "").strip()
+    return content, getattr(resp, "id", "") or "", w, h
+
+
+def call_fireworks(image, prompt: str, model: str, client) -> tuple[str, str, int, int]:
+    """Fireworks-hosted models (Inkling). Inkling always thinks; "none" is the
+    reasoning floor, which is the closest match to the interfaze run's
+    reasoning_effort=None."""
+    img_bytes, w, h = _image_to_jpeg_bytes(image)
+    b64 = base64.b64encode(img_bytes).decode("utf-8")
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                    },
+                ],
+            }
+        ],
+        temperature=0.0,
+        reasoning_effort="none",
+    )
+    content = (resp.choices[0].message.content or "").strip()
+    return content, getattr(resp, "id", "") or "", w, h
 
 
 def call_gemini(image, prompt: str, model: str, client) -> tuple[str, str, int, int]:
@@ -162,12 +274,13 @@ def call_gemini(image, prompt: str, model: str, client) -> tuple[str, str, int, 
        gemini-3*-flash*: 'minimal' (Flash supports 'minimal' as the floor)
     Gemini 2.5 used thinking_budget; we don't support that path here."""
     from google.genai import types
+
     img_bytes, w, h = _image_to_jpeg_bytes(image)
     m = model.lower()
     if "pro" in m:
         thinking_level = "low"
     else:
-        thinking_level = "minimal"
+        thinking_level = _gemini_floor(model)
     config = types.GenerateContentConfig(
         temperature=0.0,
         thinking_config=types.ThinkingConfig(thinking_level=thinking_level),
@@ -189,9 +302,17 @@ def call_gemini(image, prompt: str, model: str, client) -> tuple[str, str, int, 
 # Provider-agnostic pipeline (mirrors refcoco.py's process_sample)
 # --------------------------------------------------------------------------
 
-async def process_sample(sample: dict, call_fn, model: str, rate_limiter,
-                         writer: JsonlWriter, progress: dict, provider: str,
-                         client) -> dict | None:
+
+async def process_sample(
+    sample: dict,
+    call_fn,
+    model: str,
+    rate_limiter,
+    writer: JsonlWriter,
+    progress: dict,
+    provider: str,
+    client,
+) -> dict | None:
     """Pre-resize the image to know the exact dims that will be sent, embed
     those dims in the prompt, then call the provider adapter."""
     tmp_bytes, sent_w, sent_h = _image_to_jpeg_bytes(sample["image"])
@@ -251,7 +372,7 @@ async def process_sample(sample: dict, call_fn, model: str, rate_limiter,
             tqdm.write(
                 f"[{provider} {progress['done']}/{progress['total']}] {mark} "
                 f"id={sample['id']} iou={iou:.3f} "
-                f"pred={pred_box} gt={[round(x,1) for x in gt_xyxy]} "
+                f"pred={pred_box} gt={[round(x, 1) for x in gt_xyxy]} "
                 f"latency={latency_ms}ms req_id={request_id} attempt={attempt}"
             )
             return record
@@ -267,13 +388,16 @@ async def process_sample(sample: dict, call_fn, model: str, rate_limiter,
                 await asyncio.sleep(2 ** (attempt - 1))
 
     progress["failed"] += 1
-    tqdm.write(f"[{provider} FAILED] id={sample['id']} after {MAX_RETRIES} attempts: {last_error}")
+    tqdm.write(
+        f"[{provider} FAILED] id={sample['id']} after {MAX_RETRIES} attempts: {last_error}"
+    )
     return None
 
 
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
+
 
 def build_tag(dataset: str, split: str, provider: str, model: str) -> str:
     ds_slug = dataset.split("/")[-1].lower().replace("+", "plus")
@@ -284,13 +408,47 @@ def build_tag(dataset: str, split: str, provider: str, model: str) -> str:
 def build_client(provider: str, env: dict):
     if provider == "openai":
         from openai import OpenAI
+
         return OpenAI(api_key=env["OPENAI_API_KEY"])
     if provider == "anthropic":
         from anthropic import Anthropic
+
         return Anthropic(api_key=env["ANTHROPIC_API_KEY"])
     if provider == "gemini":
         from google import genai
-        return genai.Client(api_key=env["GEMINI_KEY"])
+
+        api_key = (
+            env.get("GEMINI_KEY")
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("GEMINI_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+        )
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY missing from .env")
+        return genai.Client(api_key=api_key)
+    if provider == "openrouter":
+        from openai import OpenAI
+
+        api_key = (
+            env.get("OPENROUTER_API_KEY")
+            or os.getenv("OPENROUTER_API_KEY")
+            or os.getenv("openrouter_api_key")
+        )
+        if not api_key:
+            raise RuntimeError("OPENROUTER_API_KEY missing from .env")
+        return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+    if provider == "fireworks":
+        from openai import OpenAI
+
+        # .env in this repo may spell the key lowercase; accept either casing.
+        api_key = (
+            env.get("FIREWORKS_API_KEY")
+            or os.getenv("FIREWORKS_API_KEY")
+            or os.getenv("fireworks_api_key")
+        )
+        if not api_key:
+            raise RuntimeError("FIREWORKS_API_KEY missing from .env")
+        return OpenAI(base_url="https://api.fireworks.ai/inference/v1", api_key=api_key)
     raise ValueError(f"unknown provider: {provider}")
 
 
@@ -299,11 +457,19 @@ def get_call_fn(provider: str):
         "openai": call_openai,
         "anthropic": call_anthropic,
         "gemini": call_gemini,
+        "fireworks": call_fireworks,
+        "openrouter": call_openrouter,
     }[provider]
 
 
-async def run(provider: str, model: str, dataset_name: str, split: str,
-              pred_path: Path, limit: int | None):
+async def run(
+    provider: str,
+    model: str,
+    dataset_name: str,
+    split: str,
+    pred_path: Path,
+    limit: int | None,
+):
     env = _load_interfaze_env()
     client = build_client(provider, env)
     call_fn = get_call_fn(provider)
@@ -317,26 +483,43 @@ async def run(provider: str, model: str, dataset_name: str, split: str,
     if limit is not None:
         pending = pending[:limit]
         print(f"--limit applied: will run at most {limit} sample(s)")
-    print(f"Resume: {len(done_ids)} already completed, {len(pending)} remaining "
-          f"(checkpoint: {pred_path})")
+    print(
+        f"Resume: {len(done_ids)} already completed, {len(pending)} remaining "
+        f"(checkpoint: {pred_path})"
+    )
     if not pending:
         return
 
     writer = JsonlWriter(pred_path)
     rate_limiter = RateLimiter(RATE_LIMIT)
     progress = {"total": len(pending), "done": 0, "correct": 0, "failed": 0}
-    tasks = [process_sample(s, call_fn, model, rate_limiter, writer, progress, provider, client)
-             for s in pending]
+    sem = asyncio.Semaphore(MAX_IN_FLIGHT)
+
+    async def bounded(sample):
+        async with sem:
+            return await process_sample(
+                sample, call_fn, model, rate_limiter, writer, progress, provider, client
+            )
+
+    tasks = [bounded(s) for s in pending]
     try:
         await tqdm_asyncio.gather(*tasks, desc=f"{provider}/{model}")
     except Exception:
         traceback.print_exc()
-    print(f"\n[{provider}/{model}] Run finished: {progress['done']}/{progress['total']} answered, "
-          f"{progress['correct']} correct, {progress['failed']} failed.")
+    print(
+        f"\n[{provider}/{model}] Run finished: {progress['done']}/{progress['total']} answered, "
+        f"{progress['correct']} correct, {progress['failed']} failed."
+    )
 
 
-def run_evaluation(dataset_name: str, split: str, pred_path: Path, metrics_path: Path,
-                   provider: str, model: str):
+def run_evaluation(
+    dataset_name: str,
+    split: str,
+    pred_path: Path,
+    metrics_path: Path,
+    provider: str,
+    model: str,
+):
     if not pred_path.exists():
         print(f"No predictions found at {pred_path}")
         sys.exit(1)
@@ -348,9 +531,12 @@ def run_evaluation(dataset_name: str, split: str, pred_path: Path, metrics_path:
     print_summary(metrics, dataset_name, split)
     output = {
         **metrics,
-        "dataset": dataset_name, "split": split,
-        "provider": provider, "model": model,
-        "rate_limit": RATE_LIMIT, "iou_threshold": IOU_THRESHOLD,
+        "dataset": dataset_name,
+        "split": split,
+        "provider": provider,
+        "model": model,
+        "rate_limit": RATE_LIMIT,
+        "iou_threshold": IOU_THRESHOLD,
     }
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     with open(metrics_path, "w") as f:
@@ -360,7 +546,11 @@ def run_evaluation(dataset_name: str, split: str, pred_path: Path, metrics_path:
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-provider RefCOCO eval")
-    parser.add_argument("--provider", required=True, choices=["openai", "anthropic", "gemini"])
+    parser.add_argument(
+        "--provider",
+        required=True,
+        choices=["openai", "anthropic", "gemini", "fireworks", "openrouter"],
+    )
     parser.add_argument("--model", required=True, help="Provider-specific model id")
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument("--split", default=DEFAULT_SPLIT)
@@ -374,16 +564,34 @@ def main():
     metrics_path = RESULTS_DIR / f"{tag}_metrics.json"
 
     if args.evaluate_only:
-        run_evaluation(args.dataset, args.split, pred_path, metrics_path,
-                       args.provider, args.model)
+        run_evaluation(
+            args.dataset, args.split, pred_path, metrics_path, args.provider, args.model
+        )
     elif args.predict_only:
-        asyncio.run(run(args.provider, args.model, args.dataset, args.split,
-                        pred_path, limit=args.limit))
+        asyncio.run(
+            run(
+                args.provider,
+                args.model,
+                args.dataset,
+                args.split,
+                pred_path,
+                limit=args.limit,
+            )
+        )
     else:
-        asyncio.run(run(args.provider, args.model, args.dataset, args.split,
-                        pred_path, limit=args.limit))
-        run_evaluation(args.dataset, args.split, pred_path, metrics_path,
-                       args.provider, args.model)
+        asyncio.run(
+            run(
+                args.provider,
+                args.model,
+                args.dataset,
+                args.split,
+                pred_path,
+                limit=args.limit,
+            )
+        )
+        run_evaluation(
+            args.dataset, args.split, pred_path, metrics_path, args.provider, args.model
+        )
 
 
 if __name__ == "__main__":

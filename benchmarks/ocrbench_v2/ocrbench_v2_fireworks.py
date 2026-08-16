@@ -1,17 +1,23 @@
 """
-OCRBench v2 benchmark for Google Gemini.
+OCRBench v2 benchmark for Fireworks-hosted models (default: Inkling).
 10,000 QA pairs across 30 task types (EN + CN).
 
+Inkling always thinks; reasoning_effort="none" is its floor, not a true off.
+
 Usage:
-    uv run -m benchmarks.ocrbench_v2.ocrbench_v2_gemini
-    uv run -m benchmarks.ocrbench_v2.ocrbench_v2_gemini --predict-only
-    uv run -m benchmarks.ocrbench_v2.ocrbench_v2_gemini --evaluate-only
+    uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks
+    uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks --model accounts/fireworks/models/inkling-small
+    uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks --predict-only
+    uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks --evaluate-only
 """
 
+import os
+import re
 import sys
 import json
 import asyncio
 import argparse
+import base64
 from pathlib import Path
 from io import BytesIO
 
@@ -21,15 +27,50 @@ from tqdm.asyncio import tqdm_asyncio
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BENCHMARK_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = PROJECT_ROOT / "results"
-PRED_OUTPUT = RESULTS_DIR / "ocrbench_v2_gemini_predictions.json"
-EVAL_OUTPUT = RESULTS_DIR / "ocrbench_v2_gemini_scored.json"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from src.commons_gemini import invoke_gemini  # noqa: E402
+from src.commons_fireworks import INKLING, fireworks_client  # noqa: E402
 
-MODEL = "gemini-3-flash-preview"
+# Provider is selectable because the same model can be reachable on more than one
+# host, and the hosts are NOT equivalent: on OpenRouter reasoning effort "none"
+# truly disables thinking, while on Fireworks it is only a floor.
+PROVIDER = "fireworks"
+CLIENT = fireworks_client
+
+
+def set_provider(provider: str) -> None:
+    global PROVIDER, CLIENT
+    PROVIDER = provider
+    if provider == "openrouter":
+        from src.commons_openrouter import openrouter_client
+
+        CLIENT = openrouter_client
+    else:
+        CLIENT = fireworks_client
+
+
+def _reasoning_kwargs() -> dict:
+    if PROVIDER == "openrouter":
+        return {"extra_body": {"reasoning": {"effort": REASONING_EFFORT}}}
+    return {"reasoning_effort": REASONING_EFFORT}
+
+MODEL = INKLING
+REASONING_EFFORT = "none"
 RATE_LIMIT = 25
 MAX_RETRIES = 3
+
+# Cap on requests in flight. RATE_LIMIT bounds how many requests *start* per
+# second but not how many are outstanding — a whole batch launched at once
+# queues server-side and eventually 429s after minutes of latency. Override
+# with BENCH_MAX_IN_FLIGHT.
+MAX_IN_FLIGHT = int(os.getenv("BENCH_MAX_IN_FLIGHT", "8"))
+
+# Set from MODEL in main() so inkling and inkling-small keep separate
+# checkpoints and can run side by side.
+TAG = "ocrbench_v2_fireworks_inkling"
+PRED_OUTPUT = RESULTS_DIR / f"{TAG}_predictions.json"
+EVAL_OUTPUT = RESULTS_DIR / f"{TAG}_scored.json"
+METRICS_OUTPUT = RESULTS_DIR / f"{TAG}_metrics.json"
 
 TEXT_SPOTTING_PROMPT_TEMPLATE = """Use OCR on this image to spot all text at {level}. The OCR tool returns each detected text region with its text content and four corner coordinates: top_left, top_right, bottom_left, bottom_right (each as an x,y pixel pair).
 
@@ -44,6 +85,19 @@ Then use run code to write a Python script that takes those OCR results and:
 
 Your final answer must be ONLY a Python list in this exact format, with no markdown, no code fences, no explanation:
 [(x1, y1, x2, y2, "text"), (x1, y1, x2, y2, "text"), ...]"""
+
+
+def model_slug(model: str) -> str:
+    """accounts/fireworks/models/inkling-small -> inkling-small"""
+    return re.sub(r"[^a-z0-9]+", "-", model.rsplit("/", 1)[-1].lower()).strip("-")
+
+
+def set_paths(model: str) -> None:
+    global TAG, PRED_OUTPUT, EVAL_OUTPUT, METRICS_OUTPUT
+    TAG = f"ocrbench_v2_fireworks_{model_slug(model)}"
+    PRED_OUTPUT = RESULTS_DIR / f"{TAG}_predictions.json"
+    EVAL_OUTPUT = RESULTS_DIR / f"{TAG}_scored.json"
+    METRICS_OUTPUT = RESULTS_DIR / f"{TAG}_metrics.json"
 
 
 def get_spotting_prompt(original_question: str) -> str:
@@ -72,34 +126,45 @@ class RateLimiter:
             await asyncio.sleep(1 / self.rate)
 
 
-def pil_to_jpeg_bytes(image) -> bytes:
+def pil_to_data_url(image) -> str:
     buffer = BytesIO()
+    if image.mode != "RGB":
+        image = image.convert("RGB")
     image.save(buffer, format="JPEG", quality=95)
-    return buffer.getvalue()
+    b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return f"data:image/jpeg;base64,{b64}"
 
 
-def build_contents(question: str, image_bytes: bytes) -> list:
-    from google.genai import types
-
+def build_messages(question: str, image_url: str) -> list[dict]:
     return [
-        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-        question,
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": question},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ],
+        }
     ]
 
 
-def extract_text(response) -> str:
-    text = getattr(response, "text", None)
-    return text or ""
+async def process_sample(sample_meta: dict, rate_limiter, sem: asyncio.Semaphore):
+    async with sem:
+        return await _process_sample(sample_meta, rate_limiter)
 
 
-async def process_sample(sample_meta: dict, rate_limiter):
-    contents = build_contents(sample_meta["question"], sample_meta["image_bytes"])
+async def _process_sample(sample_meta: dict, rate_limiter):
+    messages = build_messages(sample_meta["question"], sample_meta["image_url"])
 
     for attempt in range(MAX_RETRIES):
         await rate_limiter.acquire()
         try:
-            response = await asyncio.to_thread(invoke_gemini, contents, MODEL)
-            return extract_text(response)
+            response = await asyncio.to_thread(
+                CLIENT.chat.completions.create,
+                model=MODEL,
+                messages=messages,
+                **_reasoning_kwargs(),
+            )
+            return response.choices[0].message.content or ""
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(2**attempt)
@@ -110,12 +175,15 @@ async def process_sample(sample_meta: dict, rate_limiter):
                 return ""
 
 
-BATCH_SIZE = 100
+BATCH_SIZE = 200
 
 
-async def run_predictions():
+async def run_predictions(limit: int | None = None):
     print("Loading OCRBench v2 from HuggingFace...")
     dataset = load_dataset("lmms-lab/OCRBench-v2", split="test")
+    if limit is not None:
+        dataset = dataset.select(range(min(limit, len(dataset))))
+        print(f"--limit applied: first {len(dataset)} sample(s) only")
     total = len(dataset)
     print(f"Loaded {total} samples")
 
@@ -130,6 +198,7 @@ async def run_predictions():
         print(f"Resuming: {len(existing)} successful predictions found, skipping them")
 
     rate_limiter = RateLimiter(RATE_LIMIT)
+    sem = asyncio.Semaphore(MAX_IN_FLIGHT)
     output_data = {}
     output_data.update(existing)
     num_retried = 0
@@ -145,7 +214,7 @@ async def run_predictions():
             sample_id = batch["id"][i]
             if sample_id in existing:
                 continue
-            image_bytes = pil_to_jpeg_bytes(batch["image"][i])
+            image_url = pil_to_data_url(batch["image"][i])
             question = batch["question"][i]
             if batch["type"][i] == "text spotting en":
                 question = get_spotting_prompt(question)
@@ -156,7 +225,7 @@ async def run_predictions():
                     "type": batch["type"][i],
                     "question": question,
                     "answers": batch["answers"][i],
-                    "image_bytes": image_bytes,
+                    "image_url": image_url,
                 }
             )
         del batch
@@ -165,7 +234,7 @@ async def run_predictions():
             continue
 
         num_retried += len(samples)
-        tasks = [process_sample(s, rate_limiter) for s in samples]
+        tasks = [process_sample(s, rate_limiter, sem) for s in samples]
         predictions = await tqdm_asyncio.gather(
             *tasks, desc=f"Predicting {batch_start}-{batch_end}", leave=False
         )
@@ -181,6 +250,11 @@ async def run_predictions():
             }
 
         del samples, predictions
+
+        # Checkpoint after every batch — a 10k-sample run is too long to lose.
+        final_data = [output_data[i] for i in sorted(output_data.keys())]
+        with open(PRED_OUTPUT, "w", encoding="utf-8") as f:
+            json.dump(final_data, f, ensure_ascii=False, indent=2)
 
     final_data = [output_data[i] for i in sorted(output_data.keys())]
     with open(PRED_OUTPUT, "w", encoding="utf-8") as f:
@@ -203,6 +277,7 @@ def run_evaluation():
     sys.path.insert(0, str(eval_scripts_dir))
 
     import os
+
     original_cwd = os.getcwd()
     os.chdir(BENCHMARK_DIR)
 
@@ -311,16 +386,29 @@ def run_evaluation():
         },
         "en_overall": en_overall,
         "cn_overall": cn_overall,
+        "provider": "fireworks",
         "model": MODEL,
+        "reasoning_effort": REASONING_EFFORT,
     }
-    metrics_path = RESULTS_DIR / "ocrbench_v2_gemini_metrics.json"
-    with open(metrics_path, "w") as f:
+    with open(METRICS_OUTPUT, "w") as f:
         json.dump(metrics, f, indent=2)
-    print(f"\nMetrics saved to {metrics_path}")
+    print(f"\nMetrics saved to {METRICS_OUTPUT}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="OCRBench v2 benchmark for Google Gemini")
+    global MODEL, REASONING_EFFORT
+    parser = argparse.ArgumentParser(
+        description="OCRBench v2 benchmark for Fireworks-hosted models (Inkling)"
+    )
+    parser.add_argument(
+        "--model", default=INKLING, help="Model id for the chosen provider"
+    )
+    parser.add_argument(
+        "--provider", default="fireworks", choices=["fireworks", "openrouter"]
+    )
+    parser.add_argument(
+        "--reasoning", default="none", help="reasoning effort passed to the provider"
+    )
     parser.add_argument(
         "--predict-only", action="store_true", help="Only generate predictions"
     )
@@ -328,17 +416,24 @@ def main():
         "--evaluate-only", action="store_true", help="Only run evaluation"
     )
     parser.add_argument(
-        "--model", default=MODEL, help="Gemini model id (e.g. gemini-3.7-flash)"
+        "--limit",
+        type=int,
+        default=None,
+        help="Only predict the first N dataset rows (smoke test)",
     )
     args = parser.parse_args()
-    globals()["MODEL"] = args.model
+
+    MODEL = args.model
+    REASONING_EFFORT = args.reasoning
+    set_provider(args.provider)
+    set_paths(MODEL)
 
     if args.evaluate_only:
         run_evaluation()
     elif args.predict_only:
-        asyncio.run(run_predictions())
+        asyncio.run(run_predictions(limit=args.limit))
     else:
-        asyncio.run(run_predictions())
+        asyncio.run(run_predictions(limit=args.limit))
         run_evaluation()
 
 

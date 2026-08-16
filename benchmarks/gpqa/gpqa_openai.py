@@ -81,16 +81,15 @@ PROMPT_TEMPLATE = (
 )
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise RuntimeError(
-        "OPENAI_API_KEY is not set. Add it to .env "
-        "(get one from https://platform.openai.com/api-keys)."
-    )
 
-# Bypass the .env's interfaze base_url override.
-openai_client = OpenAI(
-    base_url="https://api.openai.com/v1",
-    api_key=OPENAI_API_KEY,
+# Bypass the .env's interfaze base_url override. Built only when the key is
+# present — the openrouter/fireworks runners import this module's dataset and
+# scoring helpers, so a hard raise here would block them; invoke_openai raises
+# instead.
+openai_client = (
+    OpenAI(base_url="https://api.openai.com/v1", api_key=OPENAI_API_KEY)
+    if OPENAI_API_KEY
+    else None
 )
 
 
@@ -99,6 +98,11 @@ def model_slug(model: str) -> str:
 
 
 def invoke_openai(messages: list[dict]):
+    if openai_client is None:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not set. Add it to .env "
+            "(get one from https://platform.openai.com/api-keys)."
+        )
     # GPT-5.x rejects temperature!=default when reasoning is engaged
     # ("Unsupported value: 'temperature' does not support 0.0 with this model.
     # Only the default (1) value is supported."). With reasoning off ('none'),
@@ -216,11 +220,15 @@ def build_sample(row: dict) -> dict:
     }
 
 
-async def process_sample(sample: dict, semaphore: asyncio.Semaphore,
-                         writer: JsonlWriter, progress: dict) -> dict | None:
+async def process_sample(
+    sample: dict, semaphore: asyncio.Semaphore, writer: JsonlWriter, progress: dict
+) -> dict | None:
     prompt = PROMPT_TEMPLATE.format(
         question=sample["question"],
-        a=sample["a"], b=sample["b"], c=sample["c"], d=sample["d"],
+        a=sample["a"],
+        b=sample["b"],
+        c=sample["c"],
+        d=sample["d"],
     )
     messages = [{"role": "user", "content": prompt}]
     last_error: str | None = None
@@ -300,13 +308,16 @@ def compute_metrics(results: list[dict]) -> dict:
         for d, rows in by_domain.items()
     }
 
-    latencies = [r["latency_ms"] for r in results if isinstance(r.get("latency_ms"), int)]
+    latencies = [
+        r["latency_ms"] for r in results if isinstance(r.get("latency_ms"), int)
+    ]
     latency_stats = {}
     if latencies:
         lats = sorted(latencies)
         n = len(lats)
         latency_stats = {
-            "count": n, "mean_ms": sum(lats) / n,
+            "count": n,
+            "mean_ms": sum(lats) / n,
             "p50_ms": lats[n // 2],
             "p90_ms": lats[min(n - 1, int(n * 0.9))],
             "p99_ms": lats[min(n - 1, int(n * 0.99))],
@@ -325,9 +336,13 @@ def compute_metrics(results: list[dict]) -> dict:
 
 def print_summary(metrics: dict):
     print(f"\n{'=' * 60}")
-    print(f"GPQA Diamond — {DATASET_ID}/{CONFIG} ({MODEL}, reasoning={REASONING_EFFORT})")
+    print(
+        f"GPQA Diamond — {DATASET_ID}/{CONFIG} ({MODEL}, reasoning={REASONING_EFFORT})"
+    )
     print(f"{'=' * 60}")
-    print(f"Accuracy   : {metrics['accuracy']:.4f} ({metrics['correct']}/{metrics['total']})")
+    print(
+        f"Accuracy   : {metrics['accuracy']:.4f} ({metrics['correct']}/{metrics['total']})"
+    )
     print(f"Unparseable: {metrics['unparseable']}")
     print("\nPer high-level domain:")
     for d in sorted(metrics["per_domain"]):
@@ -335,8 +350,10 @@ def print_summary(metrics: dict):
         print(f"  {d:12} n={v['n']:>3} acc={v['accuracy']:.4f}")
     if metrics.get("latency"):
         lat = metrics["latency"]
-        print(f"\nLatency    : mean={lat['mean_ms']:.0f}ms p50={lat['p50_ms']}ms "
-              f"p90={lat['p90_ms']}ms p99={lat['p99_ms']}ms max={lat['max_ms']}ms")
+        print(
+            f"\nLatency    : mean={lat['mean_ms']:.0f}ms p50={lat['p50_ms']}ms "
+            f"p90={lat['p90_ms']}ms p99={lat['p99_ms']}ms max={lat['max_ms']}ms"
+        )
 
 
 async def run_predictions(pred_path: Path, limit: int | None):
@@ -350,8 +367,10 @@ async def run_predictions(pred_path: Path, limit: int | None):
     if limit is not None:
         pending = pending[:limit]
         print(f"--limit applied: will run at most {limit} sample(s)")
-    print(f"Resume: {len(done_ids)} already completed, {len(pending)} remaining "
-          f"(checkpoint: {pred_path})")
+    print(
+        f"Resume: {len(done_ids)} already completed, {len(pending)} remaining "
+        f"(checkpoint: {pred_path})"
+    )
     if not pending:
         return
 
@@ -365,8 +384,10 @@ async def run_predictions(pred_path: Path, limit: int | None):
     except Exception:
         traceback.print_exc()
     acc = progress["correct"] / progress["done"] if progress["done"] else 0.0
-    print(f"\nRun finished: {progress['done']}/{progress['total']} answered, "
-          f"{progress['correct']} correct (acc={acc:.4f}), {progress['failed']} failed.")
+    print(
+        f"\nRun finished: {progress['done']}/{progress['total']} answered, "
+        f"{progress['correct']} correct (acc={acc:.4f}), {progress['failed']} failed."
+    )
 
 
 def run_evaluation(pred_path: Path, metrics_path: Path):
@@ -403,15 +424,27 @@ def run_evaluation(pred_path: Path, metrics_path: Path):
 
 def main():
     global MODEL, REASONING_EFFORT
-    parser = argparse.ArgumentParser(description="GPQA Diamond benchmark for OpenAI GPT-5.x")
-    parser.add_argument("--model", default=DEFAULT_MODEL,
-                        help="OpenAI model id (e.g. gpt-5.5, gpt-5.4-mini)")
-    parser.add_argument("--reasoning-effort", default=DEFAULT_REASONING_EFFORT,
-                        help="reasoning_effort param ('none', 'minimal', 'low', 'medium', 'high', etc.)")
+    parser = argparse.ArgumentParser(
+        description="GPQA Diamond benchmark for OpenAI GPT-5.x"
+    )
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="OpenAI model id (e.g. gpt-5.5, gpt-5.4-mini)",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        default=DEFAULT_REASONING_EFFORT,
+        help="reasoning_effort param ('none', 'minimal', 'low', 'medium', 'high', etc.)",
+    )
     parser.add_argument("--predict-only", action="store_true")
     parser.add_argument("--evaluate-only", action="store_true")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Only run the first N unanswered samples")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Only run the first N unanswered samples",
+    )
     args = parser.parse_args()
 
     MODEL = args.model

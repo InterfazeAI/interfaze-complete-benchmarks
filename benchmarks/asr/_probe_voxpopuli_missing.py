@@ -1,6 +1,3 @@
-"""One-off probe: run the single VoxPopuli-AA sample that all three Gemini runs
-dropped, and dump the raw response (text + finish reason + prompt/safety
-feedback) so we can see why it was rejected."""
 import sys
 from pathlib import Path
 
@@ -11,7 +8,13 @@ from datasets import load_dataset
 from google import genai
 from google.genai import types
 
-from benchmarks.asr.voxpopuli_aa import PROMPT, DATASET_ID, SPLIT, build_sample, fetch_audio_bytes
+from benchmarks.asr.voxpopuli_aa import (
+    DATASET_ID,
+    PROMPT,
+    SPLIT,
+    build_sample,
+    fetch_audio_bytes,
+)
 from benchmarks.asr.voxpopuli_aa_multi import _load_interfaze_env
 
 TARGET_ID = "20150527-0900-PLENARY-14-en_20150527-21:41:31_1"

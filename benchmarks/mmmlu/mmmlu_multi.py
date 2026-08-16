@@ -20,6 +20,7 @@ Usage:
     uv run -m benchmarks.mmmlu.mmmlu_multi --provider openai    --model gpt-5.4-mini
     uv run -m benchmarks.mmmlu.mmmlu_multi --provider gemini    --model gemini-3.1-pro-preview
     uv run -m benchmarks.mmmlu.mmmlu_multi --provider anthropic --model claude-sonnet-4-6
+    uv run -m benchmarks.mmmlu.mmmlu_multi --provider fireworks --model accounts/fireworks/models/inkling
     # Smoke (1 sample per language = 14 total):
     uv run -m benchmarks.mmmlu.mmmlu_multi --provider gemini --model gemini-3-flash-preview --limit 1
 
@@ -86,6 +87,28 @@ _load_interfaze_env_fallback()
 RESULTS_DIR = PROJECT_ROOT / "results"
 RATE_LIMIT = 50
 MAX_RETRIES = 3
+
+# Cap on requests in flight. RATE_LIMIT bounds how many requests *start* per
+# second but not how many are outstanding: gather() launches every pending
+# sample at once, so hundreds pile up, queue server-side, and eventually 429
+# after tens of minutes of latency. Override with BENCH_MAX_IN_FLIGHT.
+MAX_IN_FLIGHT = int(os.getenv("BENCH_MAX_IN_FLIGHT", "8"))
+
+def _gemini_floor(model: str) -> str:
+    """Lowest thinking_level the given Gemini model actually accepts.
+
+    gemini-3.7+ flash rejects MINIMAL server-side ("Thinking level MINIMAL is
+    not supported for this model"), and the SDK enum has no "off"/"none", so
+    "low" is its true floor. Older 3.x flash models still take "minimal".
+    BENCH_GEMINI_FLOOR overrides for anything not covered here.
+    """
+    override = os.getenv("BENCH_GEMINI_FLOOR")
+    if override:
+        return override
+    m = model.lower()
+    if any(v in m for v in ("3.7", "3.8", "3.9", "4.")):
+        return "low"
+    return "minimal"
 DEFAULT_TEMPERATURE = 0.0
 
 # Dataset variant — "full" (openai/MMMLU, ~196k) or "lite" (opencompass/mmmlu_lite,
@@ -110,6 +133,7 @@ ANTHROPIC_OFF_MAX_TOKENS = 512
 # Dataset loading + sample building
 # ---------------------------------------------------------------------------
 
+
 def build_sample_lite(row: dict, language: str, row_index: int) -> dict:
     """opencompass/mmmlu_lite uses input/target/A-D/subject (no Unnamed: 0)."""
     return {
@@ -132,7 +156,9 @@ def load_dataset_for_variant(variant: str, lang: str):
     return load_dataset(DATASET_FULL_ID, lang, split="test")
 
 
-def build_sample_for_variant(variant: str, row: dict, language: str, row_index: int) -> dict:
+def build_sample_for_variant(
+    variant: str, row: dict, language: str, row_index: int
+) -> dict:
     if variant == "lite":
         return build_sample_lite(row, language, row_index)
     return build_sample(row, language)
@@ -147,11 +173,13 @@ def build_sample_for_variant(variant: str, row: dict, language: str, row_index: 
 # Run synchronously inside asyncio.to_thread.
 # ---------------------------------------------------------------------------
 
+
 def _safe_int(x):
     try:
         return int(x) if x is not None else None
     except (TypeError, ValueError):
         return None
+
 
 def _openai_usage(resp) -> dict:
     """Extract input/output/reasoning tokens from an OpenAI chat.completions response."""
@@ -160,6 +188,9 @@ def _openai_usage(resp) -> dict:
         return {"input_tokens": None, "output_tokens": None, "reasoning_tokens": None}
     details = getattr(u, "completion_tokens_details", None)
     reasoning = getattr(details, "reasoning_tokens", None) if details else None
+    if reasoning is None:
+        # Fireworks reports it at the top level of `usage` for Inkling.
+        reasoning = getattr(u, "reasoning_tokens", None)
     return {
         "input_tokens": _safe_int(getattr(u, "prompt_tokens", None)),
         "output_tokens": _safe_int(getattr(u, "completion_tokens", None)),
@@ -243,7 +274,10 @@ def call_anthropic(prompt: str, model: str, client) -> tuple[str, str | None, di
         kwargs["temperature"] = DEFAULT_TEMPERATURE
         kwargs["max_tokens"] = ANTHROPIC_OFF_MAX_TOKENS
     else:
-        kwargs["thinking"] = {"type": "enabled", "budget_tokens": ANTHROPIC_HIGH_BUDGET_TOKENS}
+        kwargs["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": ANTHROPIC_HIGH_BUDGET_TOKENS,
+        }
         kwargs["max_tokens"] = ANTHROPIC_HIGH_MAX_TOKENS
     resp = client.messages.create(**kwargs)
     parts = [b.text for b in resp.content if getattr(b, "type", None) == "text"]
@@ -265,6 +299,12 @@ def _openrouter_extra_body(model: str) -> dict:
         if REASONING_MODE == "off":
             return {"reasoning": {"effort": "minimal"}}
         return {"reasoning": {"enabled": True}}
+    if m.startswith("google/"):
+        # Gemini rejects reasoning.enabled=false outright ("Reasoning is
+        # mandatory for this endpoint and cannot be disabled"), so "off" maps to
+        # its real floor: effort=minimal, measured at 0 reasoning tokens. This
+        # matches what call_gemini does natively (thinking_level="minimal").
+        return {"reasoning": {"effort": "minimal" if REASONING_MODE == "off" else "high"}}
     if m.startswith("moonshotai/"):
         body = {"reasoning": {"enabled": REASONING_MODE != "off"}}
         body["provider"] = {"only": ["moonshotai"]}
@@ -288,6 +328,24 @@ def call_openrouter(prompt: str, model: str, client) -> tuple[str, str | None, d
     )
 
 
+def call_fireworks(prompt: str, model: str, client) -> tuple[str, str | None, dict]:
+    """Fireworks-hosted models (Inkling). Inkling always thinks — reasoning_effort
+    accepts none|low|medium|high|xhigh|max and "none" is the floor, not a true
+    off, so `reasoningoff` runs here still emit reasoning tokens (recorded per
+    sample in the output JSONL)."""
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=DEFAULT_TEMPERATURE,
+        reasoning_effort="none" if REASONING_MODE == "off" else "high",
+    )
+    return (
+        (resp.choices[0].message.content or "").strip(),
+        getattr(resp, "id", None),
+        _openai_usage(resp),
+    )
+
+
 def call_gemini(prompt: str, model: str, client) -> tuple[str, str | None, dict]:
     """Gemini — off goes to each model's floor; high goes to max thinking.
        3.x Pro: 'low' floor / 'high' max.
@@ -296,6 +354,7 @@ def call_gemini(prompt: str, model: str, client) -> tuple[str, str | None, dict]
        2.5 Flash: budget=0 floor / budget=-1 for high.
     Temperature 0 is fine with thinking on for Gemini."""
     from google.genai import types
+
     m = model.lower()
     if REASONING_MODE == "off":
         if m.startswith("gemini-2.5-pro"):
@@ -305,7 +364,7 @@ def call_gemini(prompt: str, model: str, client) -> tuple[str, str | None, dict]
         elif "pro" in m:
             thinking = types.ThinkingConfig(thinking_level="low")
         else:
-            thinking = types.ThinkingConfig(thinking_level="minimal")
+            thinking = types.ThinkingConfig(thinking_level=_gemini_floor(model))
     else:
         if m.startswith("gemini-2.5"):
             thinking = types.ThinkingConfig(thinking_budget=-1)
@@ -330,6 +389,7 @@ def call_gemini(prompt: str, model: str, client) -> tuple[str, str | None, dict]
 def build_client(provider: str):
     if provider == "interfaze":
         from openai import OpenAI
+
         api_key = os.getenv("INTERFAZE_API_KEY")
         if not api_key:
             raise RuntimeError("INTERFAZE_API_KEY missing from .env")
@@ -339,6 +399,7 @@ def build_client(provider: str):
         return OpenAI(base_url="https://api.interfaze.ai/v1", api_key=api_key)
     if provider == "openai":
         from openai import OpenAI
+
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY missing from .env")
@@ -346,24 +407,41 @@ def build_client(provider: str):
         return OpenAI(base_url="https://api.openai.com/v1", api_key=api_key)
     if provider == "anthropic":
         from anthropic import Anthropic
+
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY missing from .env")
         return Anthropic(api_key=api_key)
     if provider == "gemini":
         from google import genai
+
         api_key = (
-            os.getenv("GEMINI_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            os.getenv("GEMINI_KEY")
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
         )
         if not api_key:
             raise RuntimeError("GEMINI_KEY missing from .env")
         return genai.Client(api_key=api_key)
     if provider == "openrouter":
         from openai import OpenAI
-        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_KEY")
+
+        api_key = (
+            os.getenv("OPENROUTER_API_KEY")
+            or os.getenv("openrouter_api_key")
+            or os.getenv("OPENROUTER_KEY")
+        )
         if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY missing from .env")
         return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+    if provider == "fireworks":
+        from openai import OpenAI
+
+        # .env in this repo may spell the key lowercase; accept either casing.
+        api_key = os.getenv("FIREWORKS_API_KEY") or os.getenv("fireworks_api_key")
+        if not api_key:
+            raise RuntimeError("FIREWORKS_API_KEY missing from .env")
+        return OpenAI(base_url="https://api.fireworks.ai/inference/v1", api_key=api_key)
     raise ValueError(f"unknown provider: {provider}")
 
 
@@ -374,6 +452,7 @@ def get_call_fn(provider: str):
         "anthropic": call_anthropic,
         "gemini": call_gemini,
         "openrouter": call_openrouter,
+        "fireworks": call_fireworks,
     }[provider]
 
 
@@ -385,12 +464,23 @@ def model_slug(model: str) -> str:
 # Pipeline
 # ---------------------------------------------------------------------------
 
-async def process_sample(sample: dict, call_fn, model: str, rate_limiter: RateLimiter,
-                         writer: JsonlWriter, progress: dict, provider: str,
-                         client) -> dict | None:
+
+async def process_sample(
+    sample: dict,
+    call_fn,
+    model: str,
+    rate_limiter: RateLimiter,
+    writer: JsonlWriter,
+    progress: dict,
+    provider: str,
+    client,
+) -> dict | None:
     prompt = PROMPT_TEMPLATE.format(
         question=sample["question"],
-        a=sample["a"], b=sample["b"], c=sample["c"], d=sample["d"],
+        a=sample["a"],
+        b=sample["b"],
+        c=sample["c"],
+        d=sample["d"],
     )
     last_error: str | None = None
 
@@ -398,7 +488,9 @@ async def process_sample(sample: dict, call_fn, model: str, rate_limiter: RateLi
         await rate_limiter.acquire()
         start = time.perf_counter()
         try:
-            content, request_id, usage = await asyncio.to_thread(call_fn, prompt, model, client)
+            content, request_id, usage = await asyncio.to_thread(
+                call_fn, prompt, model, client
+            )
             latency_ms = int((time.perf_counter() - start) * 1000)
             if not content:
                 last_error = "empty response content"
@@ -454,7 +546,9 @@ async def process_sample(sample: dict, call_fn, model: str, rate_limiter: RateLi
                 await asyncio.sleep(2 ** (attempt - 1))
 
     progress["failed"] += 1
-    tqdm.write(f"[{provider}/{model} FAILED] id={sample['id']} after {MAX_RETRIES} attempts: {last_error}")
+    tqdm.write(
+        f"[{provider}/{model} FAILED] id={sample['id']} after {MAX_RETRIES} attempts: {last_error}"
+    )
     return None
 
 
@@ -476,8 +570,9 @@ def load_all_samples(languages: list[str], limit: int | None) -> list[dict]:
     return all_samples
 
 
-async def run(provider: str, model: str, languages: list[str], pred_path: Path,
-              limit: int | None):
+async def run(
+    provider: str, model: str, languages: list[str], pred_path: Path, limit: int | None
+):
     client = build_client(provider)
     call_fn = get_call_fn(provider)
 
@@ -485,8 +580,10 @@ async def run(provider: str, model: str, languages: list[str], pred_path: Path,
     done_ids = load_completed_ids(pred_path)
     pending = [s for s in samples if s["id"] not in done_ids]
     print(f"[{provider}/{model}] Total samples: {len(samples)}")
-    print(f"[{provider}/{model}] Resume: {len(done_ids)} done, {len(pending)} pending "
-          f"(checkpoint: {pred_path})")
+    print(
+        f"[{provider}/{model}] Resume: {len(done_ids)} done, {len(pending)} pending "
+        f"(checkpoint: {pred_path})"
+    )
     if not pending:
         return
 
@@ -500,8 +597,15 @@ async def run(provider: str, model: str, languages: list[str], pred_path: Path,
         "failed": 0,
     }
 
-    tasks = [process_sample(s, call_fn, model, rate_limiter, writer, progress, provider, client)
-             for s in pending]
+    sem = asyncio.Semaphore(MAX_IN_FLIGHT)
+
+    async def bounded(sample):
+        async with sem:
+            return await process_sample(
+                sample, call_fn, model, rate_limiter, writer, progress, provider, client
+            )
+
+    tasks = [bounded(s) for s in pending]
     try:
         await tqdm_asyncio.gather(*tasks, desc=f"{provider}/{model}")
     except Exception:
@@ -551,17 +655,41 @@ def run_evaluation(pred_path: Path, metrics_path: Path, provider: str, model: st
 def main():
     global REASONING_MODE, DATASET_VARIANT
     parser = argparse.ArgumentParser(description="Multi-provider MMMLU runner")
-    parser.add_argument("--provider", required=True,
-                        choices=["interfaze", "openai", "anthropic", "gemini", "openrouter"])
+    parser.add_argument(
+        "--provider",
+        required=True,
+        choices=[
+            "interfaze",
+            "openai",
+            "anthropic",
+            "gemini",
+            "openrouter",
+            "fireworks",
+        ],
+    )
     parser.add_argument("--model", required=True, help="Provider-specific model id")
-    parser.add_argument("--reasoning", default="off", choices=["off", "high"],
-                        help="off = each model at its floor; high = each at max thinking")
-    parser.add_argument("--dataset-variant", default="lite", choices=["lite", "full"],
-                        help="lite = opencompass/mmmlu_lite (~20k); full = openai/MMMLU (~196k)")
-    parser.add_argument("--languages", nargs="+", default=LANGUAGES, choices=LANGUAGES,
-                        help="Subset of languages (default: all 14)")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Cap samples per language (smoke test)")
+    parser.add_argument(
+        "--reasoning",
+        default="off",
+        choices=["off", "high"],
+        help="off = each model at its floor; high = each at max thinking",
+    )
+    parser.add_argument(
+        "--dataset-variant",
+        default="lite",
+        choices=["lite", "full"],
+        help="lite = opencompass/mmmlu_lite (~20k); full = openai/MMMLU (~196k)",
+    )
+    parser.add_argument(
+        "--languages",
+        nargs="+",
+        default=LANGUAGES,
+        choices=LANGUAGES,
+        help="Subset of languages (default: all 14)",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Cap samples per language (smoke test)"
+    )
     parser.add_argument("--predict-only", action="store_true")
     parser.add_argument("--evaluate-only", action="store_true")
     args = parser.parse_args()
@@ -576,9 +704,13 @@ def main():
     if args.evaluate_only:
         run_evaluation(pred_path, metrics_path, args.provider, args.model)
     elif args.predict_only:
-        asyncio.run(run(args.provider, args.model, args.languages, pred_path, limit=args.limit))
+        asyncio.run(
+            run(args.provider, args.model, args.languages, pred_path, limit=args.limit)
+        )
     else:
-        asyncio.run(run(args.provider, args.model, args.languages, pred_path, limit=args.limit))
+        asyncio.run(
+            run(args.provider, args.model, args.languages, pred_path, limit=args.limit)
+        )
         run_evaluation(pred_path, metrics_path, args.provider, args.model)
 
 

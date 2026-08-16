@@ -6,14 +6,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-if (OPENROUTER_API_KEY := os.getenv("OPENROUTER_API_KEY", None)) is None:
+# This project's .env spells the key lowercase; accept either casing.
+if (
+    OPENROUTER_API_KEY := os.getenv("OPENROUTER_API_KEY")
+    or os.getenv("openrouter_api_key")
+) is None:
     raise ValueError(
         "OPENROUTER_API_KEY is not set in environment variables get it from https://openrouter.ai/keys"
     )
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-openrouter_client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
+# Explicit timeout + retries: without them a single hung connection blocks
+# forever. Observed on Spider2 — one request never returned and stalled the
+# whole benchmark queue for 5h at 0% CPU with 134/135 already done.
+openrouter_client = OpenAI(
+    api_key=OPENROUTER_API_KEY,
+    base_url=OPENROUTER_BASE_URL,
+    timeout=180.0,
+    max_retries=2,
+)
 
 
 def invoke_openrouter(

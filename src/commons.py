@@ -7,15 +7,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-if (INTERFAZE_API_KEY := os.getenv("INTERFAZE_API_KEY", None)) is None:
-    raise ValueError(
-        "INTERFAZE_API_KEY is not set in environment variables get it from https://interfaze.ai/dashboard"
-    )
+INTERFAZE_API_KEY = os.getenv("INTERFAZE_API_KEY", None)
 
 INTERFAZE_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.interfaze.ai/v1")
 
-interfaze_client = OpenAI(
-    base_url=INTERFAZE_BASE_URL, api_key=os.getenv("INTERFAZE_API_KEY")
+# Built only when the key is present. The multi-provider runners import shared
+# helpers from the interfaze scripts, so a hard raise here would block running
+# any other provider; the error surfaces on first use instead.
+interfaze_client = (
+    OpenAI(base_url=INTERFAZE_BASE_URL, api_key=INTERFAZE_API_KEY)
+    if INTERFAZE_API_KEY
+    else None
 )
 
 
@@ -25,6 +27,8 @@ def invoke_interfaze(
     stream: bool = False,
     structured_response: bool = False,
     structure_definition: BaseModel | None = None,
+    reasoning_effort: str | None = None,
+    temperature: float | None = None,
 ) -> dict:
     """For invoking interfaze with images you can use
     messages = [
@@ -42,13 +46,16 @@ def invoke_interfaze(
         structure_definition=ResponseModel
     )
     """
-    try:
-        response = interfaze_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            stream=stream,
+    if interfaze_client is None:
+        raise ValueError(
+            "INTERFAZE_API_KEY is not set in environment variables get it from https://interfaze.ai/dashboard"
         )
-
-        return response
+    kwargs: dict = {"model": model, "messages": messages, "stream": stream}
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    try:
+        return interfaze_client.chat.completions.create(**kwargs)
     except Exception as e:
         raise RuntimeError(f"Error invoking Interfaze API: {e}") from e
