@@ -1,12 +1,4 @@
-"""Targets + provider registry + the capability merge chain.
-
-A provider ships defaults (base_url, key precedence, and the host's baseline
-capabilities); a target YAML declares only what differs; per-benchmark and CLI
-overrides layer on top. `resolve_capabilities` collapses the chain into a typed
-`Capabilities`; `build_adapter` maps the provider name to its adapter class.
-
-Adding a MODEL is a YAML file. Adding a PROVIDER is one registry entry here.
-"""
+"""Targets + provider registry + the capability merge chain."""
 
 from __future__ import annotations
 

@@ -1,7 +1,4 @@
-"""Normalize a host response into `Response`. One function per response shape;
-the reasoning-token fallbacks (Fireworks top-level, Gemini thoughts count) live
-here instead of in every runner.
-"""
+"""Normalize a host response into `Response` (unifies the three shapes)."""
 
 from __future__ import annotations
 

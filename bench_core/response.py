@@ -1,6 +1,4 @@
-"""Normalized response — one shape regardless of host, so benchmark `parse`
-never touches choices[0] / content-blocks / .text directly.
-"""
+"""Normalized response — one shape regardless of host."""
 
 from __future__ import annotations
 

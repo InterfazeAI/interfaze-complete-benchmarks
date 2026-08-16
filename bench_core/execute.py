@@ -1,12 +1,4 @@
-"""The fallback ladder — one request through an adapter, self-healing the
-declared-capability gaps a genuinely new model exposes.
-
-`PARAM_REJECTED` is handled here: mutate the request/caps per the classified
-action, record a capability_hint (so the user promotes the fix into the target
-YAML), and retry immediately. Everything else (rate-limit, transient, empty,
-fatal) is raised as `BenchError` carrying the classification, for the runner to
-retry-with-backoff or fail.
-"""
+"""The fallback ladder: one request through an adapter, self-healing declared-cap gaps."""
 
 from __future__ import annotations
 

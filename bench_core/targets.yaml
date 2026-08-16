@@ -1,22 +1,3 @@
-# All benchmark targets in one file. The map KEY is the target name (also the
-# result-directory name). Declare only what differs from the provider's defaults
-# (see bench_core/config.py PROVIDERS). Adding a model = adding an entry here; no
-# code change.
-#
-# Schema per target:
-#   provider:  fireworks | openrouter | openai | anthropic | gemini | interfaze
-#   model_id:  the id the provider expects
-#   capabilities:      (optional) overrides of the provider defaults
-#     reasoning: { style, off_value, on_value, true_off, temperature_when_on, extra }
-#     media:     { image, audio }
-#     response:  openai_chat | anthropic_blocks | gemini_text
-#   overrides:         (optional) per-benchmark capability tweaks, e.g. { asr: {...} }
-#   harness_specific:  (optional) opaque config for isolated harnesses, e.g. { bfcl: {...} }
-#   ci_regression: true   (optional) include in the nightly regression matrix
-#
-# NB: reasoning keys are off_value/on_value, NOT off/on — bare `off:`/`on:` are
-# YAML booleans (off: low -> {False: low}).
-
 targets:
   # --- Fireworks: reasoning "none" is a FLOOR (still thinks); audio via audio_url ---
   inkling:

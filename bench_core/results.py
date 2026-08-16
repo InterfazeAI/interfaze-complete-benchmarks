@@ -1,12 +1,4 @@
-"""The single result contract. One slug, one directory layout, one discovery
-path — so a run can't be silently dropped by a prefix mismatch and two models
-can't overwrite each other's checkpoint.
-
-    results/<benchmark>/<target-slug>/
-        responses.jsonl   # resume source, one row per sample
-        metrics.json      # canonical schema (see cli/benchmark code)
-        run.json          # config snapshot
-"""
+"""The single result contract: one slug, one layout, one content-based discovery."""
 
 from __future__ import annotations
 

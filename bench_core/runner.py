@@ -1,8 +1,4 @@
-"""The one execution harness. Owns resume, bounded concurrency, rate limiting,
-retry-with-backoff, and incremental checkpointing so no benchmark reimplements
-them (the audit found ~15 divergent copies). Benchmarks supply only
-`build_request` and `parse`; inference goes through the fallback ladder.
-"""
+"""The one execution harness: rate-limit, semaphore, retry, resume, checkpoint."""
 
 from __future__ import annotations
 

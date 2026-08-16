@@ -1,12 +1,4 @@
-"""Translate an abstract reasoning *mode* into the concrete directive a host
-expects — the one place the audit's six divergent Gemini-floor encodings (plus
-the OpenAI/Fireworks/Anthropic/OpenRouter variants) now live.
-
-A benchmark asks for a mode ("off" / "low" / "medium" / "high"); the model's
-declared `ReasoningCap` says how that host expresses it and what its floor is.
-`build_reasoning` returns a `ReasoningInjection` describing where the directive
-goes; each provider adapter reads only the field for its mechanism.
-"""
+"""Translate an abstract reasoning mode into the host's concrete directive."""
 
 from __future__ import annotations
 

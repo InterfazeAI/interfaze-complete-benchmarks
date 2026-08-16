@@ -1,8 +1,4 @@
-"""Media block builders — one per host shape, so the benchmark never picks a
-shape and the silent-drop look-alikes (audio_url vs input_audio) can't be
-confused. `encode_image` is the single place RGB-convert + resize + encode
-happens (the audit found it in only 1 of 9 OCRBench variants).
-"""
+"""Media block builders — one per host shape (image + audio)."""
 
 from __future__ import annotations
 

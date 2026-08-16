@@ -1,11 +1,4 @@
-"""Declared model capabilities + the merge that resolves them.
-
-Every axis the audit found varying across providers/models is a field here, so
-that a new model is described by *data* (a target YAML file) rather than a new
-code path. Provider adapters ship a default capability dict; the target file
-overrides fields; the CLI can override again. `deep_merge` collapses the chain;
-`Capabilities.from_dict` gives adapters a typed, validated view.
-"""
+"""Declared model capabilities + the merge that resolves them."""
 
 from __future__ import annotations
 

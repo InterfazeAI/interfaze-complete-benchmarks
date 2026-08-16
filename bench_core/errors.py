@@ -1,10 +1,4 @@
-"""Classify a provider exception into the signal the fallback ladder acts on.
-
-Status code comes from the SDK attribute when present, else the leading digits
-of the message (google-genai raises a plain exception whose text starts with
-"400 INVALID_ARGUMENT ..."). PARAM_REJECTED carries an `action` the ladder maps
-to a request mutation, so a genuinely new model degrades instead of crashing.
-"""
+"""Classify a provider exception into the signal the fallback ladder acts on."""
 
 from __future__ import annotations
 

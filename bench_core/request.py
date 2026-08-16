@@ -1,7 +1,4 @@
-"""Provider-agnostic request the benchmark layer builds. Benchmarks construct
-these and never name a provider; the adapter's `encode` turns them into the
-host-native payload.
-"""
+"""Provider-agnostic request the benchmark layer builds."""
 
 from __future__ import annotations
 
