@@ -20,14 +20,13 @@ ANTHROPIC_API_KEY=...
 GEMINI_KEY=...
 OPENROUTER_API_KEY=...
 FIREWORKS_API_KEY=...
-JIGSAWSTACK_API_KEY=...   # only for benchmarks/obj_detection/ob_det_api.py
 ```
 
 Benchmarks run through one CLI: `uv run python -m bench_core run --target <name>
 --benchmark <name>` (see `python -m bench_core list-targets`). `--sample N` is a
 smoke test; re-running resumes from the per-run checkpoint (completed samples are
-skipped). The remaining bespoke runners (`ob_det_api`, `olmocr_bench_reducto`,
-BFCL) keep their own `--limit`/`--evaluate-only` flags.
+skipped). The remaining bespoke runners (`olmocr_bench_reducto`, BFCL) keep their
+own `--limit`/`--evaluate-only` flags.
 
 Two extra setup steps for specific benchmarks:
 
@@ -179,9 +178,6 @@ uv run python -m bench_core run --target gpt-5.5          --benchmark refcoco --
 uv run python -m bench_core run --target gemini-3.7-flash --benchmark refcoco --variant testA
 uv run python -m bench_core run --target inkling          --benchmark refcoco --variant plus-testB
 uv run python -m bench_core run --target inkling          --benchmark refcoco --variant g-val
-
-# JigsawStack object_detection API (a bespoke endpoint, not a chat model)
-uv run -m benchmarks.obj_detection.ob_det_api
 ```
 
 ---

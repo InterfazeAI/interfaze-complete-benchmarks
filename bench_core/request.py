@@ -12,11 +12,6 @@ class TextPart:
 
 @dataclass
 class ImagePart:
-    """Already-encoded image bytes + its mime (e.g. "image/jpeg" for OCRBench,
-    "image/png" for olmOCR — a *benchmark* choice; the wire *shape* is the
-    adapter's job). Build via `media.encode_image` so RGB-convert/resize happen
-    once, centrally, instead of in 1-of-9 variants."""
-
     data: bytes
     mime: str = "image/jpeg"
 
