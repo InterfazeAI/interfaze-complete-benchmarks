@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import importlib
+import inspect
 
 from bench_core.config import (
     build_adapter,
@@ -23,6 +24,7 @@ BENCHMARKS = {
     "mmmu_pro": "benchmarks.mmmu_pro.bench",
     "refcoco": "benchmarks.obj_detection.bench",
     "ocrbench_v2": "benchmarks.ocrbench_v2.bench",
+    "olmocr": "benchmarks.olmocr.harness",
 }
 
 
@@ -79,7 +81,10 @@ def cmd_run(args) -> None:
         )
     )
 
-    metrics = bench.score(store.load_responses(), samples)
+    score_kwargs = {}
+    if "target" in inspect.signature(bench.score).parameters:
+        score_kwargs["target"] = target
+    metrics = bench.score(store.load_responses(), samples, **score_kwargs)
     metrics.update(
         {
             "benchmark": result_name,

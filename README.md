@@ -108,7 +108,7 @@ audio input, so it runs on every benchmark here:
 
 ```bash
 uv run python -m bench_core run --target inkling --benchmark ocrbench_v2
-uv run -m benchmarks.olmocr.olmocr_bench_fireworks
+uv run python -m bench_core run --target inkling --benchmark olmocr
 uv run python -m bench_core run --target inkling --benchmark gpqa
 uv run python -m bench_core run --target inkling --benchmark mmmlu
 uv run python -m bench_core run --target inkling --benchmark mmmu_pro --variant standard
@@ -155,19 +155,13 @@ uv run -m benchmarks.ocrbench_v2.ocrbench_v2 --evaluate-only
 Links: [repo](https://github.com/allenai/olmocr/tree/main/olmocr/bench) · [dataset](https://huggingface.co/datasets/allenai/olmOCR-bench)
 
 ```bash
-# Interfaze
-uv run -m benchmarks.olmocr.olmocr_bench
+# Any target (renders each PDF page, scores via the external olmocr.bench scorer;
+# results land in logs/olmocr_<target>.log, which the report reads)
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark olmocr
+uv run python -m bench_core run --target inkling          --benchmark olmocr
 
-# Per-provider runners
-uv run -m benchmarks.olmocr.olmocr_bench_openai_mini
-uv run -m benchmarks.olmocr.olmocr_bench_gemini_pro_31
-uv run -m benchmarks.olmocr.olmocr_bench_grok
-uv run -m benchmarks.olmocr.olmocr_bench_fireworks
-
-# Useful flags
-uv run -m benchmarks.olmocr.olmocr_bench --sample           # tiny sample dataset
-uv run -m benchmarks.olmocr.olmocr_bench --generate-only    # predictions only
-uv run -m benchmarks.olmocr.olmocr_bench --skip-generation  # evaluation only
+# Reducto (a bespoke document-parsing API, not a chat model) keeps its own runner
+uv run -m benchmarks.olmocr.olmocr_bench_reducto
 ```
 
 ---

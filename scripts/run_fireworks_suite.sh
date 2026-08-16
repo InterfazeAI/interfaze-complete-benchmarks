@@ -93,7 +93,11 @@ else
   echo "  [skip] refcoco: set TARGET=<name> (python -m bench_core list-targets)"
 fi
 
-run_step olmocr uv run -m benchmarks.olmocr.olmocr_bench_fireworks --model "$MODEL"
+if [ -n "${TARGET:-}" ]; then
+  run_step olmocr uv run python -m bench_core run --benchmark olmocr --target "$TARGET"
+else
+  echo "  [skip] olmocr: set TARGET=<name> (python -m bench_core list-targets)"
+fi
 
 if [ -n "${TARGET:-}" ]; then
   run_step mmmlu uv run python -m bench_core run --benchmark mmmlu --target "$TARGET" \
