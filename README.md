@@ -114,7 +114,7 @@ uv run -m benchmarks.mmmlu.mmmlu_multi        --provider fireworks --model accou
 uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting standard
 uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting vision
 uv run -m benchmarks.obj_detection.refcoco_multi --provider fireworks --model accounts/fireworks/models/inkling
-uv run -m benchmarks.asr.voxpopuli_aa_multi   --provider fireworks --model accounts/fireworks/models/inkling
+uv run python -m bench_core run --target inkling --benchmark asr
 uv run -m benchmarks.spider2_lite.spider2_lite --provider fireworks
 ```
 
@@ -216,16 +216,10 @@ Links: [dataset](https://huggingface.co/datasets/ArtificialAnalysis/VoxPopuli-Cl
 Metric: WER with Whisper-style text normalization.
 
 ```bash
-# Interfaze
-uv run -m benchmarks.asr.voxpopuli_aa
-
-# Other providers (audio-capable)
-uv run -m benchmarks.asr.voxpopuli_aa_multi --provider gemini    --model gemini-3-flash-preview
-uv run -m benchmarks.asr.voxpopuli_aa_multi --provider openai    --model gpt-4o-audio-preview
-uv run -m benchmarks.asr.voxpopuli_aa_multi --provider anthropic --model claude-sonnet-4-6
-
-# Evaluate only
-uv run -m benchmarks.asr.voxpopuli_aa --evaluate-only
+# Any audio-capable target (the right audio wire-shape is chosen per provider)
+uv run python -m bench_core run --target interfaze-beta  --benchmark asr
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark asr
+uv run python -m bench_core run --target inkling          --benchmark asr
 ```
 
 ---

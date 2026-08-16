@@ -10,6 +10,7 @@ from bench_core.request import Message, ReasoningSpec, Request, TextPart
 
 NAME = "gpqa"
 ID_KEY = "id"
+PRIMARY_METRIC = "accuracy"
 DEFAULTS = {"reasoning": "off", "rate_limit": 10, "max_in_flight": 8}
 
 _DATASET_ID = "Idavidrein/gpqa"

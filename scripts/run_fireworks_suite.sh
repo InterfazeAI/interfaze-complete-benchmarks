@@ -67,9 +67,11 @@ run_step() {
 # Measured on inkling-small via OpenRouter: effort=high returns content=None
 # after ~233s per sample (every sample would burn 3 retries and fail), while
 # effort=none answers in ~1.3s. Transcription gains nothing from thinking.
-BENCH_OPENROUTER_EFFORT="$ASR_EFFORT" \
-run_step asr uv run -m benchmarks.asr.voxpopuli_aa_multi \
-  --provider "$PROVIDER" --model "$MODEL"
+if [ -n "${TARGET:-}" ]; then
+  run_step asr uv run python -m bench_core run --benchmark asr --target "$TARGET"
+else
+  echo "  [skip] asr: set TARGET=<name> (python -m bench_core list-targets)"
+fi
 
 run_step spider2 uv run -m benchmarks.spider2_lite.spider2_lite \
   --provider "$PROVIDER" --model "$MODEL"

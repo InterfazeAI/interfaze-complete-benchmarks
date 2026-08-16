@@ -18,6 +18,7 @@ from bench_core.runner import run_benchmark
 # benchmark short-name -> module exposing NAME/load_samples/build_request/parse/score
 BENCHMARKS = {
     "gpqa": "benchmarks.gpqa.bench",
+    "asr": "benchmarks.asr.bench",
 }
 
 
@@ -67,7 +68,7 @@ def cmd_run(args) -> None:
             "target": target.name,
             "provider": target.provider,
             "model_id": target.model_id,
-            "n": metrics.get("total"),
+            "n": metrics.get("total") or metrics.get("num_samples"),
             "reasoning": {
                 "mode": mode,
                 "style": caps.reasoning.style.value,
@@ -88,11 +89,12 @@ def cmd_run(args) -> None:
         }
     )
 
-    acc = metrics.get("accuracy")
+    primary = getattr(bench, "PRIMARY_METRIC", None)
+    pv = metrics.get(primary) if primary else None
+    head = f"{primary}={pv:.4f}  " if isinstance(pv, (int, float)) else ""
     print(
-        f"\n{bench.NAME} / {target.name}: "
-        + (f"accuracy={acc:.4f} " if acc is not None else "")
-        + f"({metrics.get('correct')}/{metrics.get('total')})  failed={result.n_failed}"
+        f"\n{bench.NAME} / {target.name}: {head}"
+        f"n={metrics.get('n')}  failed={result.n_failed}"
     )
     print(f"written to {store.metrics_path}")
     if result.hints:
