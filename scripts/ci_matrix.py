@@ -52,17 +52,19 @@ def build_matrix(
         flagged = [
             n for n, t in load_all_targets().items() if t.raw.get("ci_regression")
         ]
-        return _matrix(flagged or ["inkling"], CI_BENCHMARKS)
+        return _matrix(
+            flagged, CI_BENCHMARKS
+        )  # explicit opt-in only; nothing flagged -> nothing runs
     if event == "push":
         return _matrix(targets or [], CI_BENCHMARKS)
-    # workflow_dispatch (or manual)
+    # workflow_dispatch (or manual): no target -> nothing runs (no default model)
     b = (benchmarks or "").strip()
     benches = (
         CI_BENCHMARKS
         if (not b or b == "all")
         else [x.strip() for x in b.split(",") if x.strip()]
     )
-    return _matrix([target or "inkling"], benches)
+    return _matrix([target] if target else [], benches)
 
 
 if __name__ == "__main__":

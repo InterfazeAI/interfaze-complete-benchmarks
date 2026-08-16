@@ -23,9 +23,9 @@ def test_dispatch_all_expands_to_ci_set():
     assert {i["target"] for i in m["include"]} == {"gpt-5.5"}
 
 
-def test_dispatch_default_target():
-    m = build_matrix("workflow_dispatch", None, None)
-    assert {i["target"] for i in m["include"]} == {"inkling"}
+def test_dispatch_no_target_runs_nothing():
+    # no model selected -> empty matrix -> zero jobs (no default model)
+    assert build_matrix("workflow_dispatch", None, None)["include"] == []
 
 
 def test_schedule_uses_ci_regression_targets():

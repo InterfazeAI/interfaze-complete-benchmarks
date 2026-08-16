@@ -1,23 +1,11 @@
 name: benchmark
 
-# Runs benchmarks through the unified CLI. Manual dispatch picks a target +
-# benchmarks; the nightly schedule smoke-tests every `ci_regression: true` target
-# to catch a provider changing its API (an adapter breaking shows up as a crash
-# or empty-content, not a score drift). Defaults to small --sample runs; a full
-# run is opt-in via the sample_size input.
-#
-# Adding a model to automation: add an entry to bench_core/targets.yaml (mark it
-# ci_regression: true for the nightly), and set its provider's secret. No code.
-#
-# Not in CI: olmocr (needs poppler + playwright + the full dataset to score) and
-# spider2 (needs the ~4GB data/). Run those locally / on a self-hosted runner.
-
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: "target name (see bench_core/targets.yaml)"
-        default: inkling
+        description: "target name — required (see bench_core/targets.yaml / list-targets)"
+        required: true
       benchmarks:
         description: "comma-separated benchmarks, or 'all' for the CI set"
         default: all
@@ -42,6 +30,7 @@ jobs:
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
       targets: ${{ steps.m.outputs.targets }}
+      has_work: ${{ steps.m.outputs.has_work }}
       sample: ${{ steps.m.outputs.sample }}
       reasoning: ${{ steps.m.outputs.reasoning }}
     steps:
@@ -68,11 +57,13 @@ jobs:
           MATRIX="$(uv run python scripts/ci_matrix.py)"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "targets=$(printf '%s' "$MATRIX" | uv run python -c 'import json,sys; print(" ".join(sorted({i["target"] for i in json.load(sys.stdin)["include"]})))')" >> "$GITHUB_OUTPUT"
+          echo "has_work=$(printf '%s' "$MATRIX" | uv run python -c 'import json,sys; print(str(bool(json.load(sys.stdin)["include"])).lower())')" >> "$GITHUB_OUTPUT"
           echo "sample=$SAMPLE" >> "$GITHUB_OUTPUT"
           echo "reasoning=${{ github.event.inputs.reasoning }}" >> "$GITHUB_OUTPUT"
 
   run:
     needs: plan
+    if: needs.plan.outputs.has_work == 'true' # no target selected/flagged -> nothing runs
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

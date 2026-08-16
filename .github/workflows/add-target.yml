@@ -1,11 +1,5 @@
 name: add-target
 
-# Interactive "add a model" from the GitHub UI (Actions -> add-target -> Run
-# workflow). Fill in the fields; the workflow validates the entry, appends it to
-# bench_core/targets.yaml, and opens a PR. It does NOT run the benchmark — that
-# happens when the PR is merged (see benchmark.yml's push trigger). This is the
-# same outcome as hand-editing targets.yaml in a PR; just a guided form instead.
-
 on:
   workflow_dispatch:
     inputs:
