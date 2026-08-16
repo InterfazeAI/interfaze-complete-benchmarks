@@ -1,5 +1,0 @@
-name: claude-sonnet-4-6
-provider: anthropic
-model_id: claude-sonnet-4-6
-# Anthropic defaults fit: thinking disabled/enabled block, temperature omitted
-# when thinking is on, max_tokens forced above budget_tokens.

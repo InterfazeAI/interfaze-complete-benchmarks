@@ -1,5 +1,0 @@
-name: interfaze-beta
-provider: interfaze
-model_id: interfaze-beta
-# Interfaze defaults fit: reasoning_effort vocab is off/minimal/low/.../high/on/auto
-# (NOT "none"); audio via the OpenAI "file" block; base_url from OPENAI_BASE_URL.

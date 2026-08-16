@@ -1,0 +1,77 @@
+# All benchmark targets in one file. The map KEY is the target name (also the
+# result-directory name). Declare only what differs from the provider's defaults
+# (see bench_core/config.py PROVIDERS). Adding a model = adding an entry here; no
+# code change.
+#
+# Schema per target:
+#   provider:  fireworks | openrouter | openai | anthropic | gemini | interfaze
+#   model_id:  the id the provider expects
+#   capabilities:      (optional) overrides of the provider defaults
+#     reasoning: { style, off_value, on_value, true_off, temperature_when_on, extra }
+#     media:     { image, audio }
+#     response:  openai_chat | anthropic_blocks | gemini_text
+#   overrides:         (optional) per-benchmark capability tweaks, e.g. { asr: {...} }
+#   harness_specific:  (optional) opaque config for isolated harnesses, e.g. { bfcl: {...} }
+#   ci_regression: true   (optional) include in the nightly regression matrix
+#
+# NB: reasoning keys are off_value/on_value, NOT off/on — bare `off:`/`on:` are
+# YAML booleans (off: low -> {False: low}).
+
+targets:
+  # --- Fireworks: reasoning "none" is a FLOOR (still thinks); audio via audio_url ---
+  inkling:
+    provider: fireworks
+    model_id: accounts/fireworks/models/inkling
+
+  deepseek-v4-flash:
+    provider: fireworks
+    model_id: accounts/fireworks/models/deepseek-v4-flash
+
+  # --- OpenRouter: "none" truly disables; grok/kimi need special toggles ---
+  inkling-small:
+    provider: openrouter
+    model_id: thinkingmachines/inkling-small
+    capabilities:
+      reasoning: { extra: { toggle: effort }, off_value: none, on_value: high, true_off: true }
+
+  grok-4.3:
+    provider: openrouter
+    model_id: x-ai/grok-4.3
+    capabilities:
+      # Grok rejects reasoning.enabled=false ("Reasoning is mandatory"); floor is effort=minimal.
+      reasoning: { extra: { toggle: effort }, off_value: minimal, on_value: high, true_off: false }
+
+  kimi-k2.6:
+    provider: openrouter
+    model_id: moonshotai/kimi-k2.6
+    capabilities:
+      # Pin to Moonshot's own inference; disable via the enabled toggle.
+      reasoning:
+        extra: { toggle: enabled, provider_only: [moonshotai] }
+        off_value: false
+        on_value: true
+        true_off: true
+
+  # --- Gemini: 3.x uses thinking_level (floor "low"); 2.5 uses integer budget ---
+  gemini-3.7-flash:
+    provider: gemini
+    model_id: gemini-3.7-flash
+
+  gemini-2.5-flash:
+    provider: gemini
+    model_id: gemini-2.5-flash
+    capabilities:
+      reasoning: { style: thinking_budget, off_value: 0, on_value: -1, true_off: true }
+
+  # --- OpenAI / Anthropic / Interfaze: provider defaults fit as-is ---
+  gpt-5.5:
+    provider: openai
+    model_id: gpt-5.5
+
+  claude-sonnet-4-6:
+    provider: anthropic
+    model_id: claude-sonnet-4-6
+
+  interfaze-beta:
+    provider: interfaze
+    model_id: interfaze-beta

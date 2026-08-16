@@ -152,21 +152,42 @@ class Target:
     raw: dict = field(default_factory=dict)
 
 
-def load_target(path: str | Path) -> Target:
+DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
+
+
+def load_all_targets(path: str | Path = DEFAULT_TARGETS_FILE) -> dict[str, Target]:
+    """Parse the single targets file into {name: Target}. The map KEY is the
+    target name — one file, one entry per model, no code to add a model."""
     data = yaml.safe_load(Path(path).read_text()) or {}
-    if data.get("provider") not in PROVIDERS:
-        raise ValueError(
-            f"unknown provider {data.get('provider')!r}; known: {sorted(PROVIDERS)}"
+    raw_targets = data.get("targets") or {}
+    out: dict[str, Target] = {}
+    for name, spec in raw_targets.items():
+        spec = spec or {}
+        provider = spec.get("provider")
+        if provider not in PROVIDERS:
+            raise ValueError(
+                f"target {name!r}: unknown provider {provider!r}; "
+                f"known: {sorted(PROVIDERS)}"
+            )
+        if not spec.get("model_id"):
+            raise ValueError(f"target {name!r}: missing model_id")
+        out[name] = Target(
+            name=name,
+            provider=provider,
+            model_id=spec["model_id"],
+            capabilities=spec.get("capabilities") or {},
+            overrides=spec.get("overrides") or {},
+            harness_specific=spec.get("harness_specific") or {},
+            raw=spec,
         )
-    return Target(
-        name=data["name"],
-        provider=data["provider"],
-        model_id=data["model_id"],
-        capabilities=data.get("capabilities") or {},
-        overrides=data.get("overrides") or {},
-        harness_specific=data.get("harness_specific") or {},
-        raw=data,
-    )
+    return out
+
+
+def load_target(name: str, path: str | Path = DEFAULT_TARGETS_FILE) -> Target:
+    targets = load_all_targets(path)
+    if name not in targets:
+        raise ValueError(f"unknown target {name!r}; available: {sorted(targets)}")
+    return targets[name]
 
 
 def resolve_capabilities(
