@@ -111,8 +111,8 @@ uv run -m benchmarks.ocrbench_v2.ocrbench_v2_fireworks
 uv run -m benchmarks.olmocr.olmocr_bench_fireworks
 uv run python -m bench_core run --target inkling --benchmark gpqa
 uv run python -m bench_core run --target inkling --benchmark mmmlu
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting standard
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi  --provider fireworks --model accounts/fireworks/models/inkling --setting vision
+uv run python -m bench_core run --target inkling --benchmark mmmu_pro --variant standard
+uv run python -m bench_core run --target inkling --benchmark mmmu_pro --variant vision
 uv run -m benchmarks.obj_detection.refcoco_multi --provider fireworks --model accounts/fireworks/models/inkling
 uv run python -m bench_core run --target inkling --benchmark asr
 uv run -m benchmarks.spider2_lite.spider2_lite --provider fireworks
@@ -246,12 +246,10 @@ Links: [paper](https://arxiv.org/abs/2409.02813) · [dataset](https://huggingfac
 Two settings: `standard` (text + inline images) and `vision` (rendered question image).
 
 ```bash
-# Any provider, standard or vision
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider gemini    --model gemini-3.1-pro-preview --setting standard
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider gemini    --model gemini-3.1-pro-preview --setting vision
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider openai    --model gpt-5.5               --setting standard
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider anthropic --model claude-sonnet-4-6     --setting vision
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider interfaze --model interfaze-beta        --setting standard
+# Any target, standard or vision
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark mmmu_pro --variant standard
+uv run python -m bench_core run --target gemini-3.7-flash --benchmark mmmu_pro --variant vision
+uv run python -m bench_core run --target inkling          --benchmark mmmu_pro --variant standard
 
 # Run on Modal instead of locally
 bash benchmarks/mmmu_pro/run_full.sh

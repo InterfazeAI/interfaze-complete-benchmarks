@@ -20,6 +20,7 @@ BENCHMARKS = {
     "gpqa": "benchmarks.gpqa.bench",
     "asr": "benchmarks.asr.bench",
     "mmmlu": "benchmarks.mmmlu.bench",
+    "mmmu_pro": "benchmarks.mmmu_pro.bench",
 }
 
 
@@ -41,9 +42,23 @@ def cmd_run(args) -> None:
         )
     client = adapter.build_client()
 
-    print(f"Loading {args.benchmark} samples...")
-    samples = bench.load_samples(args.sample)
-    store = RunStore(bench.NAME, target.name)
+    variants = getattr(bench, "VARIANTS", None)
+    if variants:
+        variant = args.variant or variants[0]
+        if variant not in variants:
+            raise SystemExit(
+                f"--variant must be one of {variants} for {args.benchmark}"
+            )
+        samples = bench.load_samples(args.sample, variant=variant)
+        result_name = f"{bench.NAME}_{variant}"
+    elif args.variant:
+        raise SystemExit(f"{args.benchmark} has no variants")
+    else:
+        samples = bench.load_samples(args.sample)
+        result_name = bench.NAME
+
+    print(f"Loading {result_name} samples...")
+    store = RunStore(result_name, target.name)
     d = bench.DEFAULTS
 
     result = asyncio.run(
@@ -65,7 +80,7 @@ def cmd_run(args) -> None:
     metrics = bench.score(store.load_responses(), samples)
     metrics.update(
         {
-            "benchmark": bench.NAME,
+            "benchmark": result_name,
             "target": target.name,
             "provider": target.provider,
             "model_id": target.model_id,
@@ -118,6 +133,11 @@ def main(argv=None) -> None:
     r.add_argument("--benchmark", required=True, choices=sorted(BENCHMARKS))
     r.add_argument(
         "--reasoning", default=None, help="off|low|medium|high (default: benchmark's)"
+    )
+    r.add_argument(
+        "--variant",
+        default=None,
+        help="benchmark variant, e.g. mmmu_pro: standard|vision",
     )
     r.add_argument(
         "--sample", type=int, default=None, help="run only the first N samples"

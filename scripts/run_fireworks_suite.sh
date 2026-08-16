@@ -76,11 +76,15 @@ fi
 run_step spider2 uv run -m benchmarks.spider2_lite.spider2_lite \
   --provider "$PROVIDER" --model "$MODEL"
 
-run_step mmmupro_standard uv run -m benchmarks.mmmu_pro.mmmu_pro_multi \
-  --provider "$PROVIDER" --model "$MODEL" --setting standard --reasoning "$REASONING"
-
-run_step mmmupro_vision uv run -m benchmarks.mmmu_pro.mmmu_pro_multi \
-  --provider "$PROVIDER" --model "$MODEL" --setting vision --reasoning "$REASONING"
+if [ -n "${TARGET:-}" ]; then
+  R="$([ "$REASONING" = "high" ] && echo high || echo off)"
+  run_step mmmupro_standard uv run python -m bench_core run --benchmark mmmu_pro \
+    --target "$TARGET" --variant standard --reasoning "$R"
+  run_step mmmupro_vision uv run python -m bench_core run --benchmark mmmu_pro \
+    --target "$TARGET" --variant vision --reasoning "$R"
+else
+  echo "  [skip] mmmupro: set TARGET=<name> (python -m bench_core list-targets)"
+fi
 
 run_step refcoco uv run -m benchmarks.obj_detection.refcoco_multi \
   --provider "$PROVIDER" --model "$MODEL" --split "$REFCOCO_SPLIT"
