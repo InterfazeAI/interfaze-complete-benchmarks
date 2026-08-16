@@ -209,9 +209,6 @@ __marimo__/
 # olmOCR-Bench dataset + per-candidate prediction outputs (large, downloaded from HF)
 benchmarks/olmocr_bench/olmocr_bench/
 
-# Third-party benchmark checkouts + their venvs (see scripts/setup_bfcl.sh)
-external/
-
 # Downloaded benchmark datasets (large; fetched at runtime, not source)
 benchmarks/spider2_lite/data/
 benchmarks/olmocr/bench/full_data/

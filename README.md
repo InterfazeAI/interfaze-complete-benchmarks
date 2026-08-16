@@ -60,36 +60,6 @@ uv run -m benchmarks.spider2_lite.fetch_data
 ```
 </details>
 
-<details>
-<summary>Reading Fireworks / Inkling numbers</summary>
-
-Inkling's reasoning **can't be fully disabled** — `reasoning_effort` accepts
-`none|low|…|max`, but `none` is a floor that still emits reasoning tokens, so
-runs tagged `off` aren't like-for-like with providers that truly disable
-thinking. Per-sample `reasoning_tokens` are recorded so the real spend is
-auditable. `inkling-small` isn't on serverless (needs a dedicated deployment).
-</details>
-
-## BFCL (Berkeley Function Calling Leaderboard)
-
-Separate third-party harness in its own venv ([repo](https://github.com/ShishirPatil/gorilla/tree/main/berkeley-function-call-leaderboard) · [leaderboard](https://gorilla.cs.berkeley.edu/leaderboard.html)).
-
-```bash
-scripts/setup_bfcl.sh                                    # once; safe to re-run
-scripts/bfcl.sh generate --model openrouter-qwen3.5-35b-a3b-FC --test-category simple_python --num-threads 4
-scripts/bfcl.sh evaluate --model openrouter-qwen3.5-35b-a3b-FC --test-category simple_python
-```
-
-<details>
-<summary>BFCL gotchas</summary>
-
-- Use `scripts/bfcl.sh`, not `bfcl` directly (it sets `BFCL_PROJECT_ROOT` and the uppercase `FIREWORKS_API_KEY`).
-- BFCL **v4**: category is `simple_python`, not `simple`.
-- Fireworks runs need a non-empty `OPENAI_API_KEY` placeholder (parent handler builds an OpenAI client); `soundfile` is an undeclared dep the setup script installs.
-- **`underscore_to_dot` must match the provider** or correct calls score as `wrong_func_name` (measured 55% vs 94%). OpenRouter → `True`, Fireworks → `False`; the setup script sets it per provider.
-
-</details>
-
 ## Automation (GitHub Actions)
 
 - **`tests.yml`** — offline suite + lint on every push/PR (validates new `targets.yaml` entries).
