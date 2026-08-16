@@ -1,0 +1,67 @@
+name: add-target
+
+# Interactive "add a model" from the GitHub UI (Actions -> add-target -> Run
+# workflow). Fill in the fields; the workflow validates the entry, appends it to
+# bench_core/targets.yaml, and opens a PR. It does NOT run the benchmark — that
+# happens when the PR is merged (see benchmark.yml's push trigger). This is the
+# same outcome as hand-editing targets.yaml in a PR; just a guided form instead.
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "target name (map key, e.g. my-model)"
+        required: true
+      provider:
+        description: "provider"
+        required: true
+        type: choice
+        options: [fireworks, openrouter, openai, anthropic, gemini, interfaze]
+      model_id:
+        description: "provider model id (e.g. accounts/fireworks/models/my-model)"
+        required: true
+      capabilities_json:
+        description: 'optional capability overrides as JSON, e.g. {"reasoning":{"style":"thinking_budget","off_value":0,"on_value":-1,"true_off":true}}'
+        required: false
+        default: ""
+      ci_regression:
+        description: "include in the nightly regression run"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - run: uv sync
+      - name: Validate + append target
+        env: # via env, not inline ${{ }}, so JSON quotes can't break/inject the shell
+          T_NAME: ${{ github.event.inputs.name }}
+          T_PROVIDER: ${{ github.event.inputs.provider }}
+          T_MODEL: ${{ github.event.inputs.model_id }}
+          T_CAPS: ${{ github.event.inputs.capabilities_json }}
+          T_CI: ${{ github.event.inputs.ci_regression }}
+        run: |
+          ARGS=(--name "$T_NAME" --provider "$T_PROVIDER" --model-id "$T_MODEL" --capabilities-json "$T_CAPS")
+          [ "$T_CI" = "true" ] && ARGS+=(--ci-regression)
+          uv run python scripts/add_target.py "${ARGS[@]}"
+      - name: Open PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: add-target/${{ github.event.inputs.name }}
+          title: "Add benchmark target: ${{ github.event.inputs.name }}"
+          commit-message: "feat(targets): add ${{ github.event.inputs.name }}"
+          body: |
+            Adds `${{ github.event.inputs.name }}` (${{ github.event.inputs.provider }} / `${{ github.event.inputs.model_id }}`) to `bench_core/targets.yaml`.
+
+            The entry was validated (loads, resolves capabilities, builds its adapter).
+            **Merging this PR triggers the benchmark run for the new target** (benchmark.yml push trigger).
+          add-paths: bench_core/targets.yaml

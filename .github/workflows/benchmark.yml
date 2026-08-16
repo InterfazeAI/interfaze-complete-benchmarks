@@ -29,6 +29,9 @@ on:
         default: ""
   schedule:
     - cron: "0 6 * * *" # nightly plumbing health check
+  push:
+    branches: [main]
+    paths: [bench_core/targets.yaml] # a merged target change runs a full benchmark for it
 
 permissions:
   contents: read
@@ -42,8 +45,10 @@ jobs:
       sample: ${{ steps.m.outputs.sample }}
       reasoning: ${{ steps.m.outputs.reasoning }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # need the merge's parent to diff targets.yaml on push
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
       - run: uv sync
@@ -53,10 +58,17 @@ jobs:
           INPUT_TARGET: ${{ github.event.inputs.target }}
           INPUT_BENCHMARKS: ${{ github.event.inputs.benchmarks }}
         run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            git show "${{ github.event.before }}:bench_core/targets.yaml" > /tmp/old_targets.yaml 2>/dev/null || : > /tmp/old_targets.yaml
+            export OLD_TARGETS_FILE=/tmp/old_targets.yaml
+            SAMPLE=""   # a merged target change gets a full benchmark run
+          else
+            SAMPLE="${{ github.event.inputs.sample_size || '5' }}"
+          fi
           MATRIX="$(uv run python scripts/ci_matrix.py)"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "targets=$(printf '%s' "$MATRIX" | uv run python -c 'import json,sys; print(" ".join(sorted({i["target"] for i in json.load(sys.stdin)["include"]})))')" >> "$GITHUB_OUTPUT"
-          echo "sample=${{ github.event.inputs.sample_size || '5' }}" >> "$GITHUB_OUTPUT"
+          echo "sample=$SAMPLE" >> "$GITHUB_OUTPUT"
           echo "reasoning=${{ github.event.inputs.reasoning }}" >> "$GITHUB_OUTPUT"
 
   run:
@@ -74,8 +86,8 @@ jobs:
       INTERFAZE_API_KEY: ${{ secrets.INTERFAZE_API_KEY }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
       - run: uv sync
@@ -98,8 +110,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
       - run: uv sync

@@ -266,7 +266,7 @@ uv run python -m bench_core run --target inkling --benchmark spider2
 
 ## Automation (GitHub Actions)
 
-Two workflows under `.github/workflows/`:
+Three workflows under `.github/workflows/`:
 
 - **`tests.yml`** — the free gate on every push/PR: the offline `bench_core` suite
   + lint. `test_targets.py` validates every `bench_core/targets.yaml` entry, so a
@@ -277,14 +277,25 @@ Two workflows under `.github/workflows/`:
   - *Nightly* (`schedule`): smoke-runs every target flagged `ci_regression: true`
     to catch a provider changing its API (an adapter breaking shows up as a crash,
     not a silent drift).
+  - *On merge* (`push` to `main` touching `targets.yaml`): diffs the merge and runs
+    a **full** benchmark for the target(s) that changed.
   - A `report` job diffs each run against the committed baseline
     (`scripts/ci_compare.py`) and writes the score tables to the job summary.
+- **`add-target.yml`** — the interactive "add a model" form (Actions → add-target →
+  Run workflow): enter `name` / `provider` / `model_id` / optional
+  `capabilities_json` / `ci_regression`. It validates the entry, appends it to
+  `targets.yaml`, and **opens a PR** — it does not run anything itself.
+
+**Two ways to add a model, both gated on merge:**
+1. *Guided:* run `add-target` from the UI → it opens a PR.
+2. *By hand:* edit `bench_core/targets.yaml` in a PR.
+
+Either way, `tests.yml` validates the entry on the PR, and **merging the PR** is
+what triggers `benchmark.yml` to run the new target (full run). No code, and the
+benchmark only runs once a human has merged.
 
 **Secrets required:** `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
 `FIREWORKS_API_KEY`, `OPENROUTER_API_KEY`, `INTERFAZE_API_KEY`, `HF_TOKEN`.
-
-**Add a model to automation:** add an entry to `bench_core/targets.yaml` (mark it
-`ci_regression: true` for the nightly) and set the provider's secret — no code.
 
 **Not in CI:** `olmocr` (needs poppler + playwright + the full dataset to score)
 and `spider2` (needs the ~4GB `data/`); run those locally or on a self-hosted runner.
