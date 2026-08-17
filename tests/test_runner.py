@@ -111,6 +111,46 @@ async def test_fatal_error_records_failure_without_retry(tmp_path):
     assert store.load_responses()[0]["response"] is None
 
 
+async def test_build_request_is_bounded_by_max_in_flight(tmp_path):
+    """Requests must be built lazily as workers pick up samples — not all up
+    front. Otherwise a full image benchmark decodes/encodes every image at once
+    and OOMs CI. inflight is incremented in build_request and decremented in
+    parse; all samples succeed here, so the pairing holds (parse runs only on
+    success)."""
+    ids = [str(i) for i in range(10)]
+    adapter = MapAdapter({i: ["ok"] for i in ids})
+    store = RunStore("t", "m", root=tmp_path)
+    inflight = peak = 0
+
+    def build_request(sample):
+        nonlocal inflight, peak
+        inflight += 1
+        peak = max(peak, inflight)
+        return Request(
+            [Message("user", [TextPart(sample["id"])])], ReasoningSpec("off")
+        )
+
+    def parse(resp, sample):
+        nonlocal inflight
+        inflight -= 1
+        return resp.text
+
+    await run_benchmark(
+        adapter=adapter,
+        client=None,
+        caps=CAPS,
+        model_id="m",
+        samples=[{"id": i} for i in ids],
+        build_request=build_request,
+        parse=parse,
+        store=store,
+        backoff_base=0.0,
+        rate_limit=0,
+        max_in_flight=2,
+    )
+    assert peak <= 2  # not 10: at most max_in_flight requests built at a time
+
+
 async def test_capability_hints_are_aggregated(tmp_path):
     adapter = MapAdapter(
         {"a": [Exception("Thinking level MINIMAL is not supported"), "ok"]}

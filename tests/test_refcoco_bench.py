@@ -27,6 +27,28 @@ def test_parse_variant_restores_plus_and_g_datasets():
     assert bench._parse_variant("g-test") == ("lmms-lab/RefCOCOg", "test")
 
 
+def test_build_request_embedded_image_or_lazy_idx(monkeypatch):
+    """Smokes embed the image; full runs carry an index and read the image
+    lazily from _DATASET (so the samples list doesn't hold all 8.8k images)."""
+    from PIL import Image
+
+    img = Image.new("RGB", (16, 16))
+    base = {
+        "id": "x",
+        "expression": "cat",
+        "sent_w": 16,
+        "sent_h": 16,
+        "gt_bbox_xyxy": [0, 0, 1, 1],
+    }
+
+    req = bench.build_request({**base, "image": img}, "off")
+    assert len(req.messages[0].parts) == 2  # text + image
+
+    monkeypatch.setattr(bench, "_DATASET", {5: {"image": img}})
+    req2 = bench.build_request({**base, "idx": 5}, "off")
+    assert len(req2.messages[0].parts) == 2
+
+
 def test_compute_iou():
     assert bench.compute_iou([0, 0, 10, 10], [0, 0, 10, 10]) == 1.0
     assert bench.compute_iou([0, 0, 10, 10], [20, 20, 30, 30]) == 0.0

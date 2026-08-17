@@ -37,6 +37,7 @@ _DATASETS = {
     "g": "lmms-lab/RefCOCOg",
 }
 _MAX_SIDE = 1024
+_DATASET = None  # full-run split; images read lazily by idx to bound memory
 IOU_THRESHOLD = 0.5
 _THRESHOLDS = [0.3, 0.5, 0.7, 0.75, 0.9]
 
@@ -214,42 +215,67 @@ def _parse_variant(variant: str) -> tuple[str, str]:
     return _DATASETS[""], variant
 
 
-def load_samples(sample_size: int | None = None, variant: str = "val") -> list[dict]:
-    from bench_core.datautil import load_rows
+def _mk_sample(row, i, image, idx=None) -> dict | None:
+    answers = row.get("answer")
+    if isinstance(answers, str):
+        exprs = [answers]
+    elif isinstance(answers, list):
+        exprs = [str(a) for a in answers if str(a).strip()]
+    else:
+        exprs = []
+    if not exprs:
+        return None
+    ow, oh = image.size  # header-only; not retained on the full path
+    sw, sh = _sent_dims(ow, oh)
+    gt = coco_bbox_to_xyxy(list(row["bbox"]), sw / ow, sh / oh)
+    s = {
+        "id": f"{row.get('question_id', i)}_{i}",
+        "expression": exprs[0],
+        "sent_w": sw,
+        "sent_h": sh,
+        "gt_bbox_xyxy": gt,
+    }
+    if idx is None:
+        s["image"] = image  # smoke embeds the streamed image
+    else:
+        s["idx"] = idx  # full run reads it lazily from _DATASET
+    return s
 
+
+def load_samples(sample_size: int | None = None, variant: str = "val") -> list[dict]:
+    global _DATASET
     dataset_id, split = _parse_variant(variant)
-    rows = load_rows(dataset_id, split, sample_size)
+
+    if sample_size:
+        from bench_core.datautil import load_rows
+
+        rows = load_rows(dataset_id, split, sample_size)
+        out = (_mk_sample(r, i, r["image"]) for i, r in enumerate(rows))
+        return [s for s in out if s]
+
+    # full run: keep the split memory-mapped and read images lazily by idx
+    # (list(ds) materializes all ~8.8k decoded images and OOMs CI).
+    from datasets import load_dataset
+
+    _DATASET = load_dataset(dataset_id, split=split)
     samples = []
-    for i, row in enumerate(rows):
-        answers = row.get("answer")
-        if isinstance(answers, str):
-            exprs = [answers]
-        elif isinstance(answers, list):
-            exprs = [str(a) for a in answers if str(a).strip()]
-        else:
-            exprs = []
-        if not exprs:
-            continue
-        image = row["image"]
-        ow, oh = image.size
-        sw, sh = _sent_dims(ow, oh)
-        gt = coco_bbox_to_xyxy(list(row["bbox"]), sw / ow, sh / oh)
-        samples.append(
-            {
-                "id": f"{row.get('question_id', i)}_{i}",
-                "expression": exprs[0],
-                "image": image,
-                "sent_w": sw,
-                "sent_h": sh,
-                "gt_bbox_xyxy": gt,
-            }
-        )
+    for i in range(len(_DATASET)):
+        row = _DATASET[i]
+        s = _mk_sample(row, i, row["image"], idx=i)
+        if s:
+            samples.append(s)
     return samples
 
 
 def build_request(sample: dict, mode: str) -> Request:
     prompt = _PROMPT.format(expression=sample["expression"])
-    img = encode_image(sample["image"], "image/jpeg", max_side=_MAX_SIDE)
+    if "image" in sample:
+        image = sample["image"]  # streamed smoke: embedded
+    elif "idx" in sample:
+        image = _DATASET[sample["idx"]]["image"]  # full run: decoded lazily
+    else:
+        raise KeyError("RefCOCO sample missing both 'image' and 'idx'")
+    img = encode_image(image, "image/jpeg", max_side=_MAX_SIDE)
     return Request(
         [Message("user", [TextPart(prompt), img])], ReasoningSpec(mode), temperature=0.0
     )

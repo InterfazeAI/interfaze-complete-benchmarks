@@ -19,6 +19,7 @@ _DATASET_REPO = "MMMU/MMMU_Pro"
 _SPLIT = "test"
 _CONFIGS = {"standard": "standard (10 options)", "vision": "vision"}
 _MAX_IMAGE_SIDE = 1536
+_DATASET = None  # full-run split; images read lazily by idx to bound memory
 _LETTERS = list("ABCDEFGHIJ")
 
 _PROMPT_STANDARD = (
@@ -63,53 +64,73 @@ def _options_block(options: list[str]) -> str:
     return "\n".join(f"{ltr}. {opt}" for ltr, opt in zip(_LETTERS, options))
 
 
+def _img_cols(variant: str) -> list[str]:
+    return ["image"] if variant == "vision" else [f"image_{i}" for i in range(1, 8)]
+
+
+def _row_images(row, setting: str) -> list:
+    if setting == "vision":
+        return [row["image"]]
+    imgs = [row.get(f"image_{i}") for i in range(1, 8)]
+    return [im for im in imgs if im is not None]
+
+
+def _mk_sample(row, variant: str, idx: int | None = None) -> dict:
+    setting = "vision" if variant == "vision" else "standard"
+    s = {
+        "id": row["id"],
+        "setting": setting,
+        "options": _options(row["options"]),
+        "answer": str(row["answer"]).strip().upper(),
+        "subject": row.get("subject"),
+        "topic_difficulty": None
+        if setting == "vision"
+        else row.get("topic_difficulty"),
+    }
+    if setting == "standard":
+        s["question"] = row["question"]
+    if idx is None:
+        s["images"] = _row_images(row, setting)  # smoke embeds streamed images
+    else:
+        s["idx"] = idx  # full run reads images lazily from _DATASET
+    return s
+
+
 def load_samples(
     sample_size: int | None = None, variant: str = "standard"
 ) -> list[dict]:
-    from bench_core.datautil import load_rows
+    global _DATASET
 
-    rows = load_rows(_DATASET_REPO, _SPLIT, sample_size, config=_CONFIGS[variant])
-    samples = []
-    for row in rows:
-        row = dict(row)
-        if variant == "vision":
-            samples.append(
-                {
-                    "id": row["id"],
-                    "setting": "vision",
-                    "image": row["image"],
-                    "options": _options(row["options"]),
-                    "answer": str(row["answer"]).strip().upper(),
-                    "subject": row.get("subject"),
-                    "topic_difficulty": None,
-                }
-            )
-        else:
-            images = [row.get(f"image_{i}") for i in range(1, 8)]
-            samples.append(
-                {
-                    "id": row["id"],
-                    "setting": "standard",
-                    "question": row["question"],
-                    "options": _options(row["options"]),
-                    "images": [im for im in images if im is not None],
-                    "answer": str(row["answer"]).strip().upper(),
-                    "subject": row.get("subject"),
-                    "topic_difficulty": row.get("topic_difficulty"),
-                }
-            )
-    return samples
+    if sample_size:
+        from bench_core.datautil import load_rows
+
+        rows = load_rows(_DATASET_REPO, _SPLIT, sample_size, config=_CONFIGS[variant])
+        return [_mk_sample(dict(r), variant) for r in rows]
+
+    # full run: keep the split memory-mapped and read images lazily by idx.
+    # Build samples from an image-free view so the load pass doesn't decode
+    # every image (materializing all ~1730 rows of images OOMs CI).
+    from datasets import load_dataset
+
+    _DATASET = load_dataset(_DATASET_REPO, _CONFIGS[variant], split=_SPLIT)
+    present = [c for c in _img_cols(variant) if c in _DATASET.column_names]
+    meta = _DATASET.remove_columns(present)
+    return [_mk_sample(meta[i], variant, idx=i) for i in range(len(meta))]
 
 
 def build_request(sample: dict, mode: str) -> Request:
+    if "images" in sample:
+        pil_images = sample["images"]  # streamed smoke: embedded
+    elif "idx" in sample:
+        pil_images = _row_images(_DATASET[sample["idx"]], sample["setting"])  # lazy
+    else:
+        raise KeyError("MMMU-Pro sample missing both 'images' and 'idx'")
     if sample["setting"] == "vision":
         prompt = _PROMPT_VISION
-        pil_images = [sample["image"]]
     else:
         prompt = _PROMPT_STANDARD.format(
             question=sample["question"], options=_options_block(sample["options"])
         )
-        pil_images = sample["images"]
     parts = [TextPart(prompt)]
     parts += [
         encode_image(im, "image/jpeg", max_side=_MAX_IMAGE_SIDE) for im in pil_images
