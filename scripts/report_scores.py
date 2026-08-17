@@ -7,12 +7,10 @@ Detailed benchmark scores for every model with results on disk.
     uv run python scripts/report_scores.py --list          # just the model names
     uv run python scripts/report_scores.py --model inkling --tsv   # paste into Sheets
 
-Reads the results/<benchmark>/<target>/metrics.json contract (written by the CLI
-and `bench migrate-results`) plus the olmOCR run logs (olmOCR-bench prints its
-per-split table to stdout instead of persisting metrics, so the logs are the only
-source for those numbers). One row per target; the contract keys by
-(benchmark, target), so `bench migrate-results` already picked the best run per
-slot when several legacy runs collided.
+Reads the results/<benchmark>/<target>/metrics.json contract (written by the CLI)
+plus the olmOCR run logs (olmOCR-bench prints its per-split table to stdout
+instead of persisting metrics, so the logs are the only source for those
+numbers). One row per target; the contract keys by (benchmark, target).
 """
 
 from __future__ import annotations
@@ -172,7 +170,7 @@ def _pct(x):
 
 def load_metrics() -> dict:
     """{model: {benchmark_key: payload}} from the results/<benchmark>/<target>/
-    metrics.json contract (written by the CLI and `bench migrate-results`)."""
+    metrics.json contract (written by the CLI)."""
     from bench_core.results import discover
 
     out: dict[str, dict] = {}

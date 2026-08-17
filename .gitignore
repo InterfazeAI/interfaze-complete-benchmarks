@@ -215,7 +215,7 @@ benchmarks/olmocr/bench/full_data/
 
 # Benchmark outputs are never tracked — they are run artifacts, not source, and
 # large (hundreds of MB incl. Spider2/OCRBench responses). Kept on disk locally;
-# regenerate with a run or `bench migrate-results`.
+# regenerate with a run.
 results/
 
 # OCRBench spotting-eval scratch (generated during scoring)
