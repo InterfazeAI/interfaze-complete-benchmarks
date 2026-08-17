@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+    branches: [main] # post-merge sanity; feature branches are covered by their PR
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Install deps
+        run: uv sync --group dev
+      - name: Lint (new code)
+        run: uv run ruff check src tests
+      - name: Tests (offline)
+        run: uv run pytest -q

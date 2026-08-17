@@ -84,7 +84,8 @@ def run_reducto(
         timeout=timeout,
     )
     try:
-        from src.commons_reducto import record_usage
+        from src.providers.reducto import record_usage
+
         record_usage("parse", getattr(response, "usage", None))
     except Exception:
         pass

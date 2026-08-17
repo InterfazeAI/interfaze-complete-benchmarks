@@ -85,8 +85,7 @@ def download_full_dataset():
                 tests = [json.loads(l) for l in f if l.strip()]
             data_dir.mkdir(parents=True, exist_ok=True)
             with open(jsonl_dest, "w") as f:
-                for t in tests:
-                    f.write(json.dumps(t) + "\n")
+                f.writelines(json.dumps(t) + "\n" for t in tests)
         print(f"    {split}: {len(tests)} tests")
         for t in tests:
             all_pdfs.add(t["pdf"])
@@ -137,7 +136,6 @@ async def generate_outputs(data_dir: Path):
     pdf_folder = data_dir / "pdfs"
     output_folder = data_dir / CANDIDATE_NAME
 
-    
     pdf_pages = set()
     for jsonl_file in data_dir.glob("*.jsonl"):
         with open(jsonl_file) as f:
@@ -179,7 +177,7 @@ async def generate_outputs(data_dir: Path):
     print(f"Done: {num_success} succeeded, {num_failed} failed")
 
     try:
-        from src.commons_reducto import write_usage_snapshot
+        from src.providers.reducto import write_usage_snapshot
 
         write_usage_snapshot(USAGE_OUTPUT)
         print(f"Usage written to {USAGE_OUTPUT}")

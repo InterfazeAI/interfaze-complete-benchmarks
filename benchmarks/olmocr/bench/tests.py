@@ -26,10 +26,18 @@ class TableData:
     """Class to hold table data and metadata about headers."""
 
     data: np.ndarray  # The actual table data
-    header_rows: Set[int] = field(default_factory=set)  # Indices of rows that are headers
-    header_cols: Set[int] = field(default_factory=set)  # Indices of columns that are headers
-    col_headers: dict = field(default_factory=dict)  # Maps column index to header text, handling colspan
-    row_headers: dict = field(default_factory=dict)  # Maps row index to header text, handling rowspan
+    header_rows: Set[int] = field(
+        default_factory=set
+    )  # Indices of rows that are headers
+    header_cols: Set[int] = field(
+        default_factory=set
+    )  # Indices of columns that are headers
+    col_headers: dict = field(
+        default_factory=dict
+    )  # Maps column index to header text, handling colspan
+    row_headers: dict = field(
+        default_factory=dict
+    )  # Maps row index to header text, handling rowspan
 
     def __repr__(self) -> str:
         """Returns a concise representation of the TableData object for debugging."""
@@ -40,7 +48,9 @@ class TableData:
         output = []
 
         # Table dimensions
-        output.append(f"Table: {self.data.shape[0]} rows × {self.data.shape[1]} columns")
+        output.append(
+            f"Table: {self.data.shape[0]} rows × {self.data.shape[1]} columns"
+        )
 
         # Header info
         output.append(f"Header rows: {sorted(self.header_rows)}")
@@ -52,7 +62,11 @@ class TableData:
         # Add a header for row indices
         output.append(separator)
         headers = [""] + [f"Column {i}" for i in range(self.data.shape[1])]
-        output.append("| {:<5} | ".format("Row") + " | ".join(["{:<15}".format(h) for h in headers[1:]]) + " |")
+        output.append(
+            "| {:<5} | ".format("Row")
+            + " | ".join(["{:<15}".format(h) for h in headers[1:]])
+            + " |"
+        )
         output.append(separator)
 
         # Format each row
@@ -68,7 +82,11 @@ class TableData:
                     cell = f"*{cell}*"
                 cells.append(cell)
 
-            row_str = "| {:<5} | ".format(i) + " | ".join(["{:<15}".format(c) for c in cells]) + " |"
+            row_str = (
+                "| {:<5} | ".format(i)
+                + " | ".join(["{:<15}".format(c) for c in cells])
+                + " |"
+            )
             output.append(row_str)
             output.append(separator)
 
@@ -137,7 +155,21 @@ def normalize_text(md_content: str) -> str:
     md_content = unicodedata.normalize("NFC", md_content)
 
     # Dictionary of characters to replace: keys are fancy characters, values are ASCII equivalents, unicode micro with greek mu comes up often enough too
-    replacements = {"‘": "'", "’": "'", "‚": "'", "“": '"', "”": '"', "„": '"', "＿": "_", "–": "-", "—": "-", "‑": "-", "‒": "-", "−": "-", "\u00b5": "\u03bc"}
+    replacements = {
+        "‘": "'",
+        "’": "'",
+        "‚": "'",
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "＿": "_",
+        "–": "-",
+        "—": "-",
+        "‑": "-",
+        "‒": "-",
+        "−": "-",
+        "\u00b5": "\u03bc",
+    }
 
     # Apply all replacements from the dictionary
     for fancy_char, ascii_char in replacements.items():
@@ -185,7 +217,9 @@ def parse_markdown_tables(md_content: str) -> List[TableData]:
                     if table_data and len(table_data) > 0:
                         # Convert to numpy array for easier manipulation
                         max_cols = max(len(row) for row in table_data)
-                        padded_data = [row + [""] * (max_cols - len(row)) for row in table_data]
+                        padded_data = [
+                            row + [""] * (max_cols - len(row)) for row in table_data
+                        ]
                         table_array = np.array(padded_data)
 
                         # In markdown tables, the first row is typically a header row
@@ -196,20 +230,28 @@ def parse_markdown_tables(md_content: str) -> List[TableData]:
                         if len(table_array) > 0:
                             for col_idx in range(table_array.shape[1]):
                                 if col_idx < len(table_array[0]):
-                                    col_headers[col_idx] = [(0, table_array[0, col_idx])]
+                                    col_headers[col_idx] = [
+                                        (0, table_array[0, col_idx])
+                                    ]
 
                         # Set up row_headers with first column headers for each row
                         row_headers = {}
                         if table_array.shape[1] > 0:
-                            for row_idx in range(1, table_array.shape[0]):  # Skip header row
-                                row_headers[row_idx] = [(0, table_array[row_idx, 0])]  # First column as heading
+                            for row_idx in range(
+                                1, table_array.shape[0]
+                            ):  # Skip header row
+                                row_headers[row_idx] = [
+                                    (0, table_array[row_idx, 0])
+                                ]  # First column as heading
 
                         # Create TableData object
                         parsed_tables.append(
                             TableData(
                                 data=table_array,
                                 header_rows=header_rows,
-                                header_cols={0} if table_array.shape[1] > 0 else set(),  # First column as header
+                                header_cols={0}
+                                if table_array.shape[1] > 0
+                                else set(),  # First column as header
                                 col_headers=col_headers,
                                 row_headers=row_headers,
                             )
@@ -239,14 +281,18 @@ def parse_markdown_tables(md_content: str) -> List[TableData]:
             row_headers = {}
             if table_array.shape[1] > 0:
                 for row_idx in range(1, table_array.shape[0]):  # Skip header row
-                    row_headers[row_idx] = [(0, table_array[row_idx, 0])]  # First column as heading
+                    row_headers[row_idx] = [
+                        (0, table_array[row_idx, 0])
+                    ]  # First column as heading
 
             # Create TableData object
             parsed_tables.append(
                 TableData(
                     data=table_array,
                     header_rows=header_rows,
-                    header_cols={0} if table_array.shape[1] > 0 else set(),  # First column as header
+                    header_cols={0}
+                    if table_array.shape[1] > 0
+                    else set(),  # First column as header
                     col_headers=col_headers,
                     row_headers=row_headers,
                 )
@@ -374,7 +420,9 @@ def parse_html_tables(html_content: str) -> List[TableData]:
                         if j == 0 and i > 0:  # Only for cells directly below
                             cell_grid[(row_idx + i, col_idx + j)] = cell_text
                         else:
-                            cell_grid[(row_idx + i, col_idx + j)] = ""  # Mark other spans as empty
+                            cell_grid[(row_idx + i, col_idx + j)] = (
+                                ""  # Mark other spans as empty
+                            )
 
                 # If this is a header cell (th), mark it and its span
                 if cell.name == "th":
@@ -427,12 +475,19 @@ def parse_html_tables(html_content: str) -> List[TableData]:
                 # Add this header to all columns it spans over
                 for row_idx in range(len(table_data)):
                     if row_idx not in header_rows:  # Only apply to data rows
-                        for j in range(col, len(table_data[row_idx]) if row_idx < len(table_data) else 0):
+                        for j in range(
+                            col,
+                            len(table_data[row_idx])
+                            if row_idx < len(table_data)
+                            else 0,
+                        ):
                             # Add header info to data cells in these columns
                             if j not in col_headers:
                                 col_headers[j] = []
                             if not any(h[1] == header_text for h in col_headers[j]):
-                                header_row = min([r for r, t in col_headers.get(col, [(0, "")])])
+                                header_row = min(
+                                    [r for r, t in col_headers.get(col, [(0, "")])]
+                                )
                                 col_headers[j].append((header_row, header_text))
 
         # Handle row headers
@@ -452,7 +507,9 @@ def parse_html_tables(html_content: str) -> List[TableData]:
                 if col_idx < len(row) and row[col_idx].strip():
                     if row_idx not in row_headers:
                         row_headers[row_idx] = []
-                    if not any(h[1] == row[col_idx] for h in row_headers.get(row_idx, [])):
+                    if not any(
+                        h[1] == row[col_idx] for h in row_headers.get(row_idx, [])
+                    ):
                         row_headers[row_idx].append((col_idx, row[col_idx]))
 
         # Calculate max columns for padding
@@ -465,7 +522,13 @@ def parse_html_tables(html_content: str) -> List[TableData]:
 
             # Create TableData object with the table and header information
             parsed_tables.append(
-                TableData(data=table_array, header_rows=header_rows, header_cols=header_cols, col_headers=col_headers, row_headers=row_headers)
+                TableData(
+                    data=table_array,
+                    header_rows=header_rows,
+                    header_cols=header_cols,
+                    col_headers=col_headers,
+                    row_headers=row_headers,
+                )
             )
 
     return parsed_tables
@@ -556,20 +619,28 @@ class TextPresenceTest(BasePDFTest):
             md_content = md_content[-self.last_n :]
 
         # Threshold for fuzzy matching derived from max_diffs
-        threshold = 1.0 - (self.max_diffs / (len(reference_query) if len(reference_query) > 0 else 1))
+        threshold = 1.0 - (
+            self.max_diffs / (len(reference_query) if len(reference_query) > 0 else 1)
+        )
         best_ratio = fuzz.partial_ratio(reference_query, md_content) / 100.0
 
         if self.type == TestType.PRESENT.value:
             if best_ratio >= threshold:
                 return True, ""
             else:
-                msg = f"Expected '{reference_query[:40]}...' with threshold {threshold} " f"but best match ratio was {best_ratio:.3f}"
+                msg = (
+                    f"Expected '{reference_query[:40]}...' with threshold {threshold} "
+                    f"but best match ratio was {best_ratio:.3f}"
+                )
                 return False, msg
         else:  # ABSENT
             if best_ratio < threshold:
                 return True, ""
             else:
-                msg = f"Expected absence of '{reference_query[:40]}...' with threshold {threshold} " f"but best match ratio was {best_ratio:.3f}"
+                msg = (
+                    f"Expected absence of '{reference_query[:40]}...' with threshold {threshold} "
+                    f"but best match ratio was {best_ratio:.3f}"
+                )
                 return False, msg
 
 
@@ -596,25 +667,43 @@ class TextOrderTest(BasePDFTest):
             raise ValidationError("Before field cannot be empty")
         if not self.after.strip():
             raise ValidationError("After field cannot be empty")
-        if self.max_diffs > len(self.before) // 2 or self.max_diffs > len(self.after) // 2:
-            raise ValidationError("Max diffs is too large for this test, greater than 50% of the search string")
+        if (
+            self.max_diffs > len(self.before) // 2
+            or self.max_diffs > len(self.after) // 2
+        ):
+            raise ValidationError(
+                "Max diffs is too large for this test, greater than 50% of the search string"
+            )
 
     def run(self, md_content: str) -> Tuple[bool, str]:
         md_content = normalize_text(md_content)
 
-        before_matches = find_near_matches(self.before, md_content, max_l_dist=self.max_diffs)
-        after_matches = find_near_matches(self.after, md_content, max_l_dist=self.max_diffs)
+        before_matches = find_near_matches(
+            self.before, md_content, max_l_dist=self.max_diffs
+        )
+        after_matches = find_near_matches(
+            self.after, md_content, max_l_dist=self.max_diffs
+        )
 
         if not before_matches:
-            return False, f"'before' text '{self.before[:40]}...' not found with max_l_dist {self.max_diffs}"
+            return (
+                False,
+                f"'before' text '{self.before[:40]}...' not found with max_l_dist {self.max_diffs}",
+            )
         if not after_matches:
-            return False, f"'after' text '{self.after[:40]}...' not found with max_l_dist {self.max_diffs}"
+            return (
+                False,
+                f"'after' text '{self.after[:40]}...' not found with max_l_dist {self.max_diffs}",
+            )
 
         for before_match in before_matches:
             for after_match in after_matches:
                 if before_match.start < after_match.start:
                     return True, ""
-        return False, (f"Could not find a location where '{self.before[:40]}...' appears before " f"'{self.after[:40]}...'.")
+        return False, (
+            f"Could not find a location where '{self.before[:40]}...' appears before "
+            f"'{self.after[:40]}...'."
+        )
 
 
 @dataclass
@@ -671,7 +760,9 @@ class TableTest(BasePDFTest):
         failed_reasons = []
 
         # Threshold for fuzzy matching derived from max_diffs
-        threshold = 1.0 - (self.max_diffs / (len(self.cell) if len(self.cell) > 0 else 1))
+        threshold = 1.0 - (
+            self.max_diffs / (len(self.cell) if len(self.cell) > 0 else 1)
+        )
         threshold = max(0.5, threshold)
 
         # Parse tables based on content_type
@@ -716,23 +807,45 @@ class TableTest(BasePDFTest):
                 if self.up and row_idx > 0:
                     up_cell = normalize_text(table_array[row_idx - 1, col_idx])
                     up_similarity = fuzz.ratio(self.up, up_cell) / 100.0
-                    if up_similarity < max(0.5, 1.0 - (self.max_diffs / (len(self.up) if len(self.up) > 0 else 1))):
+                    if up_similarity < max(
+                        0.5,
+                        1.0
+                        - (self.max_diffs / (len(self.up) if len(self.up) > 0 else 1)),
+                    ):
                         all_relationships_satisfied = False
-                        current_failed_reasons.append(f"Cell above '{up_cell}' doesn't match expected '{self.up}' (similarity: {up_similarity:.2f})")
+                        current_failed_reasons.append(
+                            f"Cell above '{up_cell}' doesn't match expected '{self.up}' (similarity: {up_similarity:.2f})"
+                        )
 
                 # Check down relationship
                 if self.down and row_idx < table_array.shape[0] - 1:
                     down_cell = normalize_text(table_array[row_idx + 1, col_idx])
                     down_similarity = fuzz.ratio(self.down, down_cell) / 100.0
-                    if down_similarity < max(0.5, 1.0 - (self.max_diffs / (len(self.down) if len(self.down) > 0 else 1))):
+                    if down_similarity < max(
+                        0.5,
+                        1.0
+                        - (
+                            self.max_diffs
+                            / (len(self.down) if len(self.down) > 0 else 1)
+                        ),
+                    ):
                         all_relationships_satisfied = False
-                        current_failed_reasons.append(f"Cell below '{down_cell}' doesn't match expected '{self.down}' (similarity: {down_similarity:.2f})")
+                        current_failed_reasons.append(
+                            f"Cell below '{down_cell}' doesn't match expected '{self.down}' (similarity: {down_similarity:.2f})"
+                        )
 
                 # Check left relationship
                 if self.left and col_idx > 0:
                     left_cell = normalize_text(table_array[row_idx, col_idx - 1])
                     left_similarity = fuzz.ratio(self.left, left_cell) / 100.0
-                    if left_similarity < max(0.5, 1.0 - (self.max_diffs / (len(self.left) if len(self.left) > 0 else 1))):
+                    if left_similarity < max(
+                        0.5,
+                        1.0
+                        - (
+                            self.max_diffs
+                            / (len(self.left) if len(self.left) > 0 else 1)
+                        ),
+                    ):
                         all_relationships_satisfied = False
                         current_failed_reasons.append(
                             f"Cell to the left '{left_cell}' doesn't match expected '{self.left}' (similarity: {left_similarity:.2f})"
@@ -742,7 +855,14 @@ class TableTest(BasePDFTest):
                 if self.right and col_idx < table_array.shape[1] - 1:
                     right_cell = normalize_text(table_array[row_idx, col_idx + 1])
                     right_similarity = fuzz.ratio(self.right, right_cell) / 100.0
-                    if right_similarity < max(0.5, 1.0 - (self.max_diffs / (len(self.right) if len(self.right) > 0 else 1))):
+                    if right_similarity < max(
+                        0.5,
+                        1.0
+                        - (
+                            self.max_diffs
+                            / (len(self.right) if len(self.right) > 0 else 1)
+                        ),
+                    ):
                         all_relationships_satisfied = False
                         current_failed_reasons.append(
                             f"Cell to the right '{right_cell}' doesn't match expected '{self.right}' (similarity: {right_similarity:.2f})"
@@ -759,11 +879,24 @@ class TableTest(BasePDFTest):
                     if col_idx in table_data.col_headers:
                         for _, header_text in table_data.col_headers[col_idx]:
                             header_text = normalize_text(header_text)
-                            similarity = fuzz.ratio(self.top_heading, header_text) / 100.0
+                            similarity = (
+                                fuzz.ratio(self.top_heading, header_text) / 100.0
+                            )
                             if similarity > best_similarity:
                                 best_similarity = similarity
                                 best_match = header_text
-                                if best_similarity >= max(0.5, 1.0 - (self.max_diffs / (len(self.top_heading) if len(self.top_heading) > 0 else 1))):
+                                if best_similarity >= max(
+                                    0.5,
+                                    1.0
+                                    - (
+                                        self.max_diffs
+                                        / (
+                                            len(self.top_heading)
+                                            if len(self.top_heading) > 0
+                                            else 1
+                                        )
+                                    ),
+                                ):
                                     top_heading_found = True
                                     break
 
@@ -772,11 +905,24 @@ class TableTest(BasePDFTest):
                         for i in sorted(header_rows):
                             if i < row_idx and table_array[i, col_idx].strip():
                                 header_text = normalize_text(table_array[i, col_idx])
-                                similarity = fuzz.ratio(self.top_heading, header_text) / 100.0
+                                similarity = (
+                                    fuzz.ratio(self.top_heading, header_text) / 100.0
+                                )
                                 if similarity > best_similarity:
                                     best_similarity = similarity
                                     best_match = header_text
-                                    if best_similarity >= max(0.5, 1.0 - (self.max_diffs / (len(self.top_heading) if len(self.top_heading) > 0 else 1))):
+                                    if best_similarity >= max(
+                                        0.5,
+                                        1.0
+                                        - (
+                                            self.max_diffs
+                                            / (
+                                                len(self.top_heading)
+                                                if len(self.top_heading) > 0
+                                                else 1
+                                            )
+                                        ),
+                                    ):
                                         top_heading_found = True
                                         break
 
@@ -785,15 +931,30 @@ class TableTest(BasePDFTest):
                         for i in range(row_idx):
                             if table_array[i, col_idx].strip():
                                 header_text = normalize_text(table_array[i, col_idx])
-                                similarity = fuzz.ratio(self.top_heading, header_text) / 100.0
+                                similarity = (
+                                    fuzz.ratio(self.top_heading, header_text) / 100.0
+                                )
                                 if similarity > best_similarity:
                                     best_similarity = similarity
                                     best_match = header_text
 
                     if not best_match:
                         all_relationships_satisfied = False
-                        current_failed_reasons.append(f"No top heading found for cell at ({row_idx}, {col_idx})")
-                    elif best_similarity < max(0.5, 1.0 - (self.max_diffs / (len(self.top_heading) if len(self.top_heading) > 0 else 1))):
+                        current_failed_reasons.append(
+                            f"No top heading found for cell at ({row_idx}, {col_idx})"
+                        )
+                    elif best_similarity < max(
+                        0.5,
+                        1.0
+                        - (
+                            self.max_diffs
+                            / (
+                                len(self.top_heading)
+                                if len(self.top_heading) > 0
+                                else 1
+                            )
+                        ),
+                    ):
                         all_relationships_satisfied = False
                         current_failed_reasons.append(
                             f"Top heading '{best_match}' doesn't match expected '{self.top_heading}' (similarity: {best_similarity:.2f})"
@@ -810,11 +971,24 @@ class TableTest(BasePDFTest):
                     if row_idx in table_data.row_headers:
                         for _, header_text in table_data.row_headers[row_idx]:
                             header_text = normalize_text(header_text)
-                            similarity = fuzz.ratio(self.left_heading, header_text) / 100.0
+                            similarity = (
+                                fuzz.ratio(self.left_heading, header_text) / 100.0
+                            )
                             if similarity > best_similarity:
                                 best_similarity = similarity
                                 best_match = header_text
-                                if best_similarity >= max(0.5, 1.0 - (self.max_diffs / (len(self.left_heading) if len(self.left_heading) > 0 else 1))):
+                                if best_similarity >= max(
+                                    0.5,
+                                    1.0
+                                    - (
+                                        self.max_diffs
+                                        / (
+                                            len(self.left_heading)
+                                            if len(self.left_heading) > 0
+                                            else 1
+                                        )
+                                    ),
+                                ):
                                     left_heading_found = True
                                     break
 
@@ -823,11 +997,24 @@ class TableTest(BasePDFTest):
                         for j in sorted(header_cols):
                             if j < col_idx and table_array[row_idx, j].strip():
                                 header_text = normalize_text(table_array[row_idx, j])
-                                similarity = fuzz.ratio(self.left_heading, header_text) / 100.0
+                                similarity = (
+                                    fuzz.ratio(self.left_heading, header_text) / 100.0
+                                )
                                 if similarity > best_similarity:
                                     best_similarity = similarity
                                     best_match = header_text
-                                    if best_similarity >= max(0.5, 1.0 - (self.max_diffs / (len(self.left_heading) if len(self.left_heading) > 0 else 1))):
+                                    if best_similarity >= max(
+                                        0.5,
+                                        1.0
+                                        - (
+                                            self.max_diffs
+                                            / (
+                                                len(self.left_heading)
+                                                if len(self.left_heading) > 0
+                                                else 1
+                                            )
+                                        ),
+                                    ):
                                         left_heading_found = True
                                         break
 
@@ -836,15 +1023,30 @@ class TableTest(BasePDFTest):
                         for j in range(col_idx):
                             if table_array[row_idx, j].strip():
                                 header_text = normalize_text(table_array[row_idx, j])
-                                similarity = fuzz.ratio(self.left_heading, header_text) / 100.0
+                                similarity = (
+                                    fuzz.ratio(self.left_heading, header_text) / 100.0
+                                )
                                 if similarity > best_similarity:
                                     best_similarity = similarity
                                     best_match = header_text
 
                     if not best_match:
                         all_relationships_satisfied = False
-                        current_failed_reasons.append(f"No left heading found for cell at ({row_idx}, {col_idx})")
-                    elif best_similarity < max(0.5, 1.0 - (self.max_diffs / (len(self.left_heading) if len(self.left_heading) > 0 else 1))):
+                        current_failed_reasons.append(
+                            f"No left heading found for cell at ({row_idx}, {col_idx})"
+                        )
+                    elif best_similarity < max(
+                        0.5,
+                        1.0
+                        - (
+                            self.max_diffs
+                            / (
+                                len(self.left_heading)
+                                if len(self.left_heading) > 0
+                                else 1
+                            )
+                        ),
+                    ):
                         all_relationships_satisfied = False
                         current_failed_reasons.append(
                             f"Left heading '{best_match}' doesn't match expected '{self.left_heading}' (similarity: {best_similarity:.2f})"
@@ -858,9 +1060,15 @@ class TableTest(BasePDFTest):
 
         # If we've gone through all tables and all matching cells and none satisfied all relationships
         if not failed_reasons:
-            return False, f"No cell matching '{self.cell}' found in any table with threshold {threshold}"
+            return (
+                False,
+                f"No cell matching '{self.cell}' found in any table with threshold {threshold}",
+            )
         else:
-            return False, f"Found cells matching '{self.cell}' but relationships were not satisfied: {'; '.join(failed_reasons)}"
+            return (
+                False,
+                f"Found cells matching '{self.cell}' but relationships were not satisfied: {'; '.join(failed_reasons)}",
+            )
 
 
 @dataclass
@@ -887,10 +1095,15 @@ class BaselineTest(BasePDFTest):
             if self.max_length_skips_image_alt_tags:
                 # Remove markdown image tags like ![alt text](image.png) from the text length count
                 content_for_length_check = re.sub(r"!\[.*?\]\(.*?\)", "", content)
-                base_content_len = len("".join(c for c in content_for_length_check if c.isalnum()).strip())
+                base_content_len = len(
+                    "".join(c for c in content_for_length_check if c.isalnum()).strip()
+                )
 
             if base_content_len > self.max_length:
-                return False, f"{base_content_len} characters were output for a page we expected to be blank"
+                return (
+                    False,
+                    f"{base_content_len} characters were output for a page we expected to be blank",
+                )
             else:
                 return True, ""
 
@@ -906,7 +1119,10 @@ class BaselineTest(BasePDFTest):
 
         for index, count in enumerate(repeats):
             if count > self.max_repeats:
-                return False, f"Text ends with {count} repeating {index+1}-grams, invalid"
+                return (
+                    False,
+                    f"Text ends with {count} repeating {index + 1}-grams, invalid",
+                )
 
         pattern = re.compile(
             r"["
@@ -970,7 +1186,9 @@ class MathTest(BasePDFTest):
             equations.extend([e.strip() for e in matches])
 
             # Replace all instances of this pattern with empty strings
-            modified_content = re.sub(replace_pattern, "", modified_content, flags=re.DOTALL)
+            modified_content = re.sub(
+                replace_pattern, "", modified_content, flags=re.DOTALL
+            )
 
         # If an equation in the markdown exactly matches our math string, then that's good enough
         # we don't have to do a more expensive comparison
@@ -1046,7 +1264,9 @@ def load_tests(jsonl_file: str) -> List[BasePDFTest]:
         A list of test objects.
     """
 
-    def process_line_with_number(line_tuple: Tuple[int, str]) -> Optional[Tuple[int, BasePDFTest]]:
+    def process_line_with_number(
+        line_tuple: Tuple[int, str],
+    ) -> Optional[Tuple[int, BasePDFTest]]:
         """
         Process a single line from the JSONL file and return a tuple of (line_number, test object).
         Returns None for empty lines.
@@ -1078,9 +1298,13 @@ def load_tests(jsonl_file: str) -> List[BasePDFTest]:
     # Use a ThreadPoolExecutor to process each line in parallel.
     with ThreadPoolExecutor(max_workers=min(os.cpu_count() or 1, 64)) as executor:
         # Submit all tasks concurrently.
-        futures = {executor.submit(process_line_with_number, item): item[0] for item in lines}
+        futures = {
+            executor.submit(process_line_with_number, item): item[0] for item in lines
+        }
         # Use tqdm to show progress as futures complete.
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Loading tests"):
+        for future in tqdm(
+            as_completed(futures), total=len(futures), desc="Loading tests"
+        ):
             result = future.result()
             if result is not None:
                 _, test = result
@@ -1090,7 +1314,9 @@ def load_tests(jsonl_file: str) -> List[BasePDFTest]:
     unique_ids = set()
     for test in tests:
         if test.id in unique_ids:
-            raise ValidationError(f"Test with duplicate id {test.id} found, error loading tests.")
+            raise ValidationError(
+                f"Test with duplicate id {test.id} found, error loading tests."
+            )
         unique_ids.add(test.id)
 
     return tests

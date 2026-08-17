@@ -1,0 +1,182 @@
+"""The one execution harness: rate-limit, worker pool, provider failover, retry,
+resume, checkpoint."""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, field
+
+from src.capabilities import Capabilities
+from src.errors import ErrorKind
+from src.execute import BenchError, execute
+from src.results import RunStore
+
+_RETRYABLE = {ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT, ErrorKind.EMPTY_CONTENT}
+# Advance to the next provider route only when the host itself won't serve.
+# NOT on EMPTY_CONTENT: the backup runs the same weights and returns the same
+# empty output, so failing over there just doubles the bill for a dead sample.
+_FAILOVER = {ErrorKind.FATAL, ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT}
+
+
+@dataclass
+class Route:
+    provider: str
+    model_id: str
+    adapter: object
+    caps: Capabilities
+    client: object = None
+
+
+@dataclass
+class RunResult:
+    n_completed: int = 0
+    n_failed: int = 0
+    hints: list[str] = field(default_factory=list)
+
+
+class _RateLimiter:
+    """Token bucket bounding how many requests *start* per second."""
+
+    def __init__(self, rate: float):
+        self.rate = rate
+        self.tokens = float(rate)
+        self.last = None
+        self._lock = asyncio.Lock()
+
+    async def acquire(self):
+        if self.rate <= 0:
+            return
+        while True:
+            async with self._lock:
+                now = asyncio.get_running_loop().time()
+                if self.last is None:
+                    self.last = now
+                self.tokens = min(
+                    self.rate, self.tokens + (now - self.last) * self.rate
+                )
+                self.last = now
+                if self.tokens >= 1:
+                    self.tokens -= 1
+                    return
+            await asyncio.sleep(1.0 / self.rate)
+
+
+async def run_benchmark(
+    *,
+    routes: list[Route],
+    samples,
+    build_request,
+    parse,
+    store: RunStore,
+    id_key: str = "id",
+    done=None,
+    rate_limit: float = 25.0,
+    max_in_flight: int = 8,
+    max_retries: int = 3,
+    backoff_base: float = 1.0,
+) -> RunResult:
+    if done is None:
+
+        def done(r):
+            return r.get("response") is not None
+
+    completed = store.completed_ids(id_key, done)
+    pending = [s for s in samples if s[id_key] not in completed]
+
+    limiter = _RateLimiter(rate_limit)
+    result = RunResult()
+    lock = asyncio.Lock()
+
+    async def process(sample):
+        req = build_request(sample)
+        last_err = None
+        for route in routes:
+            outcome = None
+            for attempt in range(max_retries + 1):
+                await limiter.acquire()
+                try:
+                    resp, hints = await asyncio.to_thread(
+                        execute,
+                        route.adapter,
+                        route.client,
+                        req,
+                        route.caps,
+                        route.model_id,
+                    )
+                except BenchError as be:
+                    last_err = be
+                    kind = be.classification.kind
+                    if kind in _RETRYABLE and attempt < max_retries:
+                        if backoff_base > 0:
+                            await asyncio.sleep(backoff_base * (2**attempt))
+                        continue
+                    outcome = kind
+                    break
+                await _record_success(
+                    sample,
+                    resp,
+                    hints,
+                    parse,
+                    store,
+                    result,
+                    lock,
+                    id_key,
+                    route.provider,
+                )
+                return
+            if outcome not in _FAILOVER:
+                break  # a genuine non-answer from this host; a backup won't help
+        await _record_failure(sample, last_err, store, result, lock, id_key)
+
+    # Bounded worker pool: build_request runs only when a worker pulls a sample,
+    # so at most max_in_flight requests (and their decoded images) exist at once.
+    # An eager gather(process(s) for s in pending) builds every request up front
+    # — for a full image benchmark that decodes all ~10k images and OOMs CI.
+    queue: asyncio.Queue = asyncio.Queue()
+    for s in pending:
+        queue.put_nowait(s)
+
+    async def worker():
+        while True:
+            try:
+                sample = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            await process(sample)
+
+    await asyncio.gather(*(worker() for _ in range(min(max_in_flight, len(pending)))))
+    return result
+
+
+async def _record_success(
+    sample, resp, hints, parse, store, result, lock, id_key, host
+):
+    prediction = parse(resp, sample)
+    record = {
+        id_key: sample[id_key],
+        "response": resp.text,
+        "prediction": prediction,
+        "reasoning_tokens": resp.reasoning_tokens,
+        "host": host,  # which provider actually served this row (failover audit)
+    }
+    if hints:
+        record["capability_hints"] = hints
+    async with lock:
+        store.append_response(record)
+        result.n_completed += 1
+        for h in hints:
+            if h not in result.hints:
+                result.hints.append(h)
+
+
+async def _record_failure(sample, be, store, result, lock, id_key):
+    record = {
+        id_key: sample[id_key],
+        "response": None,
+        "prediction": None,
+        "error": be.classification.kind.value,
+        "error_message": be.classification.message,
+    }
+    async with lock:
+        store.append_response(record)
+        result.n_failed += 1
