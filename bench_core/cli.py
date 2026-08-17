@@ -61,7 +61,11 @@ def cmd_run(args) -> None:
         result_name = bench.NAME
 
     print(f"Loading {result_name} samples...")
-    store = RunStore(result_name, target.name)
+    # sampled runs are smokes: isolate them under results/_smoke/ so they can
+    # never clobber or shadow a full run's metrics (results/ is gitignored, so a
+    # clobbered full-run metrics.json would be unrecoverable).
+    root = "results" if args.sample is None else "results/_smoke"
+    store = RunStore(result_name, target.name, root=root)
     d = bench.DEFAULTS
 
     result = asyncio.run(

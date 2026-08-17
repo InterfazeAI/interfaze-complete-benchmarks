@@ -66,10 +66,9 @@ def _options_block(options: list[str]) -> str:
 def load_samples(
     sample_size: int | None = None, variant: str = "standard"
 ) -> list[dict]:
-    from datasets import load_dataset
+    from bench_core.datautil import load_rows
 
-    ds = load_dataset(_DATASET_REPO, _CONFIGS[variant], split=_SPLIT)
-    rows = list(ds)[:sample_size] if sample_size else list(ds)
+    rows = load_rows(_DATASET_REPO, _SPLIT, sample_size, config=_CONFIGS[variant])
     samples = []
     for row in rows:
         row = dict(row)

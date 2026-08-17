@@ -1,4 +1,4 @@
-# Interfaze complete benchmark scripts
+# Interfaze complete benchmark
 
 [Blog](https://interfaze.ai/blog/interfaze-a-new-model-architecture-built-for-high-accuracy-at-scale) · [Leaderboard](https://interfaze.ai/leaderboards)
 
@@ -13,8 +13,12 @@ uv sync
 Add a `.env` with the provider keys you'll use:
 
 ```env
-INTERFAZE_API_KEY=…   OPENAI_API_KEY=…   ANTHROPIC_API_KEY=…
-GEMINI_KEY=…          OPENROUTER_API_KEY=…   FIREWORKS_API_KEY=…
+INTERFAZE_API_KEY=…
+OPENAI_API_KEY=…
+ANTHROPIC_API_KEY=…
+GEMINI_KEY=…
+OPENROUTER_API_KEY=…
+FIREWORKS_API_KEY=…
 ```
 
 ## Run a benchmark
@@ -29,9 +33,16 @@ uv run python -m bench_core run --target gpt-5.5 --benchmark ocrbench_v2 --sampl
 uv run python scripts/report_scores.py                              # view scores
 ```
 
-`--sample N` runs the first N samples (smoke); omit it for the full benchmark.
-Re-running resumes from the checkpoint. Add `--reasoning off|low|medium|high` to
-override the target's default.
+`--sample N` runs the first N samples — a *smoke*. It **streams** only those N
+rows, so smoking a heavy image benchmark (e.g. `ocrbench_v2`, ~10k images) no
+longer downloads the whole split first. Smokes write to `results/_smoke/…`,
+isolated from full runs and hidden from `report_scores.py`, so they can't clobber
+a real score. Omit `--sample` for the full benchmark. Re-running resumes from the
+checkpoint. Add `--reasoning off|low|medium|high` to override the target's default.
+
+> A **full** image-benchmark run loads the whole split into RAM (RefCOCO `val` ≈
+> 8.8k images → several GB). Smoke with `--sample` first; if a full local run runs
+> out of memory, see the lazy-by-index loader `ocrbench_v2` already uses.
 
 | Benchmark | `--benchmark` | Notes | Links |
 |---|---|---|---|
@@ -58,6 +69,7 @@ uv run python -m playwright install chromium
 # Spider2 — clone + download the SQLite databases
 uv run -m benchmarks.spider2_lite.fetch_data
 ```
+
 </details>
 
 ## Automation (GitHub Actions)

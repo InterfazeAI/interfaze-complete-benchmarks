@@ -86,35 +86,49 @@ def get_spotting_prompt(question: str) -> str:
     return TEXT_SPOTTING_PROMPT_TEMPLATE.format(level=level)
 
 
+def _mk_sample(row, idx=None, image=None) -> dict:
+    question = row["question"]
+    if row["type"] == "text spotting en":
+        question = get_spotting_prompt(question)
+    s = {
+        "id": row["id"],
+        "dataset_name": row["dataset_name"],
+        "type": row["type"],
+        "question": question,
+        "answers": row["answers"],
+    }
+    # full runs carry only an index (image read lazily); smokes embed the image
+    if image is not None:
+        s["image"] = image
+    else:
+        s["idx"] = idx
+    return s
+
+
 def load_samples(sample_size: int | None = None) -> list[dict]:
     global _DATASET
     from datasets import load_dataset
 
+    if sample_size:
+        # stream the first N so a smoke doesn't download all 10k images
+        ds = load_dataset(_DATASET_ID, split=_SPLIT, streaming=True)
+        return [_mk_sample(dict(r), image=r["image"]) for r in ds.take(sample_size)]
+
+    # full run: keep the split memory-mapped and read images lazily by index
+    # (materializing 10k decoded images would OOM)
     ds = load_dataset(_DATASET_ID, split=_SPLIT)
     _DATASET = ds
     meta = ds.select_columns(["id", "dataset_name", "type", "question", "answers"])
-    n = len(meta) if sample_size is None else min(sample_size, len(meta))
-    samples = []
-    for i in range(n):
-        row = meta[i]
-        question = row["question"]
-        if row["type"] == "text spotting en":
-            question = get_spotting_prompt(question)
-        samples.append(
-            {
-                "id": row["id"],
-                "idx": i,
-                "dataset_name": row["dataset_name"],
-                "type": row["type"],
-                "question": question,
-                "answers": row["answers"],
-            }
-        )
-    return samples
+    return [_mk_sample(meta[i], idx=i) for i in range(len(meta))]
 
 
 def build_request(sample: dict, mode: str) -> Request:
-    image = _DATASET[sample["idx"]]["image"]  # decoded lazily
+    if "image" in sample:
+        image = sample["image"]  # streamed smoke: embedded
+    elif "idx" in sample:
+        image = _DATASET[sample["idx"]]["image"]  # full run: decoded lazily
+    else:
+        raise KeyError("OCRBench sample missing both 'image' and 'idx'")
     img = encode_image(
         image, "image/jpeg"
     )  # RGB + JPEG q95, no resize (matches runner)

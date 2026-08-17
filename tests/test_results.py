@@ -4,7 +4,20 @@ content-based discovery so reporting and re-scoring can't disagree (the audit
 found report_scores dropping 5 of 7 RefCOCO runners by prefix mismatch).
 """
 
+import json
+
 from bench_core.results import RunStore, discover, model_slug
+
+
+def test_sampled_run_is_isolated_from_full_run(tmp_path):
+    """A --sample smoke (written under an isolated _smoke root) must neither
+    clobber a full run's metrics on disk nor appear in the leaderboard."""
+    full = RunStore("gpqa", "inkling", root=tmp_path)
+    full.write_metrics({"n": 198})
+    smoke = RunStore("gpqa", "inkling", root=tmp_path / "_smoke")
+    smoke.write_metrics({"n": 3})
+    assert json.loads(full.metrics_path.read_text())["n"] == 198
+    assert [d["n"] for d in discover(tmp_path)] == [198]
 
 
 def test_model_slug_is_canonical():

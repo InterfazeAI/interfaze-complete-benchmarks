@@ -215,11 +215,10 @@ def _parse_variant(variant: str) -> tuple[str, str]:
 
 
 def load_samples(sample_size: int | None = None, variant: str = "val") -> list[dict]:
-    from datasets import load_dataset
+    from bench_core.datautil import load_rows
 
     dataset_id, split = _parse_variant(variant)
-    ds = load_dataset(dataset_id, split=split)
-    rows = list(ds)[:sample_size] if sample_size else list(ds)
+    rows = load_rows(dataset_id, split, sample_size)
     samples = []
     for i, row in enumerate(rows):
         answers = row.get("answer")
