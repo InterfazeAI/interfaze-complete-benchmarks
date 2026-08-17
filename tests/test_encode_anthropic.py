@@ -3,9 +3,9 @@ block, temperature omission under thinking, and the max_tokens > budget_tokens
 coupling (all declarative via the cap).
 """
 
-from bench_core.capabilities import Capabilities
-from bench_core.providers.anthropic import AnthropicAdapter
-from bench_core.request import ImagePart, Message, ReasoningSpec, Request, TextPart
+from src.capabilities import Capabilities
+from src.providers.anthropic import AnthropicAdapter
+from src.request import ImagePart, Message, ReasoningSpec, Request, TextPart
 
 CAPS = Capabilities.from_dict(
     {

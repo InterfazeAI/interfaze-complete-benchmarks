@@ -2,9 +2,9 @@
 field (level vs budget) and that media parts become genai Parts. Uses the real
 google-genai types (offline — no network)."""
 
-from bench_core.capabilities import Capabilities
-from bench_core.providers.gemini import GeminiAdapter
-from bench_core.request import ImagePart, Message, ReasoningSpec, Request, TextPart
+from src.capabilities import Capabilities
+from src.providers.gemini import GeminiAdapter
+from src.request import ImagePart, Message, ReasoningSpec, Request, TextPart
 
 LEVEL_CAPS = Capabilities.from_dict(
     {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, assert_never
 
-from bench_core.capabilities import ReasoningCap, ReasoningStyle
+from src.capabilities import ReasoningCap, ReasoningStyle
 
 _HIGH_MODES = {"high", "on", "max"}
 _OFF_MODES = {"off", "none", "disabled"}

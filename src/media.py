@@ -7,8 +7,8 @@ import io
 from dataclasses import dataclass
 from typing import Any
 
-from bench_core.capabilities import AudioShape, ImageShape
-from bench_core.request import AudioPart, ImagePart
+from src.capabilities import AudioShape, ImageShape
+from src.request import AudioPart, ImagePart
 
 
 #Marker for a native `google.genai` part

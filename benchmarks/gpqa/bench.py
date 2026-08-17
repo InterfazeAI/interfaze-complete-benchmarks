@@ -6,7 +6,7 @@ import random
 import re
 from collections import defaultdict
 
-from bench_core.request import Message, ReasoningSpec, Request, TextPart
+from src.request import Message, ReasoningSpec, Request, TextPart
 
 NAME = "gpqa"
 ID_KEY = "id"

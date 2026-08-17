@@ -6,15 +6,15 @@ rather than failing mid-run.
 
 import pytest
 
-from bench_core.capabilities import Capabilities
-from bench_core.config import build_adapter, load_all_targets, resolve_capabilities
+from src.capabilities import Capabilities
+from src.config import build_adapter, load_all_targets, resolve_capabilities
 
 TARGETS = load_all_targets()
 TARGET_NAMES = sorted(TARGETS)
 
 
 def test_targets_exist():
-    assert TARGET_NAMES, "no targets defined in bench_core/targets.yaml"
+    assert TARGET_NAMES, "no targets defined in src/targets.yaml"
 
 
 @pytest.mark.parametrize("name", TARGET_NAMES)

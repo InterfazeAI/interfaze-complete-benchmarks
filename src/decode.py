@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from bench_core.capabilities import ResponseShape
-from bench_core.response import Response
+from src.capabilities import ResponseShape
+from src.response import Response
 
 
 def _get(obj: Any, name: str, default=None):

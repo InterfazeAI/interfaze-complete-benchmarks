@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 
-from bench_core.capabilities import Capabilities, ReasoningStyle
-from bench_core.errors import Classification, ErrorKind
-from bench_core.request import Request
-from bench_core.response import Response
+from src.capabilities import Capabilities, ReasoningStyle
+from src.errors import Classification, ErrorKind
+from src.request import Request
+from src.response import Response
 
 _THINKING_FLOORS = ["minimal", "low", "medium", "high"]
 

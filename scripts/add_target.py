@@ -1,4 +1,4 @@
-"""Append a target to bench_core/targets.yaml from UI/CLI inputs, then validate.
+"""Append a target to src/targets.yaml from UI/CLI inputs, then validate.
 
 Used by the add-target GitHub workflow (which opens a PR) and locally:
 
@@ -25,14 +25,14 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from bench_core.config import (
+from src.config import (
     PROVIDERS,
     build_adapter,
     load_all_targets,
     resolve_capabilities,
 )
 
-TARGETS_FILE = ROOT / "bench_core" / "targets.yaml"
+TARGETS_FILE = ROOT / "src" / "targets.yaml"
 
 
 def _entry_text(name, provider, model_id, capabilities, ci_regression) -> str:

@@ -15,8 +15,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from bench_core.media import encode_image
-from bench_core.request import Message, ReasoningSpec, Request, TextPart
+from src.media import encode_image
+from src.request import Message, ReasoningSpec, Request, TextPart
 
 NAME = "ocrbench_v2"
 ID_KEY = "id"

@@ -4,7 +4,7 @@
 import os
 import sys
 
-from bench_core.cli import main
+from src.cli import main
 
 main()
 sys.stdout.flush()

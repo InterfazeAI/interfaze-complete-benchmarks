@@ -7,8 +7,8 @@ import re
 from collections import defaultdict
 from typing import Any
 
-from bench_core.media import encode_image
-from bench_core.request import Message, ReasoningSpec, Request, TextPart
+from src.media import encode_image
+from src.request import Message, ReasoningSpec, Request, TextPart
 
 NAME = "mmmu_pro"
 ID_KEY = "id"
@@ -103,7 +103,7 @@ def load_samples(
     global _DATASET
 
     if sample_size:
-        from bench_core.datautil import load_rows
+        from src.datautil import load_rows
 
         rows = load_rows(_DATASET_REPO, _SPLIT, sample_size, config=_CONFIGS[variant])
         return [_mk_sample(dict(r), variant) for r in rows]

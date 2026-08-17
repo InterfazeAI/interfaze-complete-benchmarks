@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "target name — required (see bench_core/targets.yaml / list-targets)"
+        description: "target name — required (see src/targets.yaml / list-targets)"
         required: true
       benchmarks:
         description: "comma-separated benchmarks, or 'all' for the CI set"
@@ -19,7 +19,7 @@ on:
     - cron: "0 6 * * 1"
   push:
     branches: [main]
-    paths: [bench_core/targets.yaml] # a merged target change runs a full benchmark for it
+    paths: [src/targets.yaml] # a merged target change runs a full benchmark for it
 
 # never run two paid benchmark passes for the same ref at once (queue, don't cancel
 # — a half-finished expensive run's spend shouldn't be thrown away)
@@ -54,7 +54,7 @@ jobs:
           INPUT_BENCHMARKS: ${{ github.event.inputs.benchmarks }}
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
-            git show "${{ github.event.before }}:bench_core/targets.yaml" > /tmp/old_targets.yaml 2>/dev/null || : > /tmp/old_targets.yaml
+            git show "${{ github.event.before }}:src/targets.yaml" > /tmp/old_targets.yaml 2>/dev/null || : > /tmp/old_targets.yaml
             export OLD_TARGETS_FILE=/tmp/old_targets.yaml
             SAMPLE=""   # a merged target change gets a full benchmark run
           else
@@ -92,7 +92,7 @@ jobs:
         run: |
           SAMPLE="${{ needs.plan.outputs.sample }}"
           REASONING="${{ needs.plan.outputs.reasoning }}"
-          uv run python -m bench_core run \
+          uv run python -m src run \
             --target "${{ matrix.target }}" --benchmark "${{ matrix.benchmark }}" \
             ${SAMPLE:+--sample "$SAMPLE"} ${REASONING:+--reasoning "$REASONING"}
       - name: Upload metrics

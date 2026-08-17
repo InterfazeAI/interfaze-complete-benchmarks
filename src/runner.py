@@ -6,10 +6,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from bench_core.capabilities import Capabilities
-from bench_core.errors import ErrorKind
-from bench_core.execute import BenchError, execute
-from bench_core.results import RunStore
+from src.capabilities import Capabilities
+from src.errors import ErrorKind
+from src.execute import BenchError, execute
+from src.results import RunStore
 
 _RETRYABLE = {ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT, ErrorKind.EMPTY_CONTENT}
 # Advance to the next provider route only when the host itself won't serve.

@@ -61,7 +61,7 @@ def build_matrix(
     targets: list[str] | None = None,
 ) -> dict:
     if event == "schedule":
-        from bench_core.config import load_all_targets
+        from src.config import load_all_targets
 
         flagged = [
             n for n, t in load_all_targets().items() if t.raw.get("ci_regression")
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     if event == "push":
         tl = changed_targets(
             os.getenv("OLD_TARGETS_FILE"),
-            os.getenv("NEW_TARGETS_FILE", "bench_core/targets.yaml"),
+            os.getenv("NEW_TARGETS_FILE", "src/targets.yaml"),
         )
         print(json.dumps(build_matrix("push", targets=tl)))
     else:

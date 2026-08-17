@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from bench_core.capabilities import Capabilities
-from bench_core.media import image_block
-from bench_core.providers.base import ProviderAdapter
-from bench_core.reasoning import build_reasoning
-from bench_core.request import ImagePart, Message, Request, TextPart
+from src.capabilities import Capabilities
+from src.media import image_block
+from src.providers.base import ProviderAdapter
+from src.reasoning import build_reasoning
+from src.request import ImagePart, Message, Request, TextPart
 
 _DEFAULT_OFF_MAX = 1024
 _DEFAULT_ON_MAX = 16000

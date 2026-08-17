@@ -23,6 +23,6 @@ jobs:
       - name: Install deps
         run: uv sync --group dev
       - name: Lint (new code)
-        run: uv run ruff check bench_core tests
+        run: uv run ruff check src tests
       - name: Tests (offline)
         run: uv run pytest -q

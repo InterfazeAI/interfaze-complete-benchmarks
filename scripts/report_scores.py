@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))  # so `bench_core` is importable when run as a script
+sys.path.insert(0, str(ROOT))  # so `src` is importable when run as a script
 RESULTS = ROOT / "results"
 LOGS = ROOT / "logs"
 
@@ -171,7 +171,7 @@ def _pct(x):
 def load_metrics() -> dict:
     """{model: {benchmark_key: payload}} from the results/<benchmark>/<target>/
     metrics.json contract (written by the CLI)."""
-    from bench_core.results import discover
+    from src.results import discover
 
     out: dict[str, dict] = {}
     for d in discover(RESULTS):

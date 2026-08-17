@@ -7,10 +7,10 @@ from typing import Any
 
 import yaml
 
-from bench_core.capabilities import Capabilities, deep_merge
-from bench_core.providers.anthropic import AnthropicAdapter
-from bench_core.providers.gemini import GeminiAdapter
-from bench_core.providers.openai_compat import OpenAICompatAdapter
+from src.capabilities import Capabilities, deep_merge
+from src.providers.anthropic import AnthropicAdapter
+from src.providers.gemini import GeminiAdapter
+from src.providers.openai_compat import OpenAICompatAdapter
 
 
 @dataclass
@@ -220,7 +220,7 @@ def build_adapter(target: Target):
 def build_routes(
     target: Target, benchmark: str | None = None, cli_overrides: dict | None = None
 ):
-    from bench_core.runner import Route
+    from src.runner import Route
 
     specs = [target] + [
         Target(

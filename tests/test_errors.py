@@ -4,7 +4,7 @@ saw a model raise (Gemini "MINIMAL not supported", grok "Reasoning is
 mandatory", GPT-5 temperature-under-reasoning).
 """
 
-from bench_core.errors import ErrorKind, classify
+from src.errors import ErrorKind, classify
 
 
 class FakeAPIError(Exception):

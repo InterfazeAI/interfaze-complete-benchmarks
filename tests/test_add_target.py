@@ -12,8 +12,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts
 from add_target import add_target
 from ci_matrix import changed_targets
 
-from bench_core.capabilities import ReasoningStyle
-from bench_core.config import load_all_targets, resolve_capabilities
+from src.capabilities import ReasoningStyle
+from src.config import load_all_targets, resolve_capabilities
 
 
 def _base(tmp_path):

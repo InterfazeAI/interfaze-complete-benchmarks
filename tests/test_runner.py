@@ -4,11 +4,11 @@ scripted fake adapter through the real `execute`, so no network and no sleeps
 (backoff_base=0).
 """
 
-from bench_core.capabilities import Capabilities
-from bench_core.request import Message, ReasoningSpec, Request, TextPart
-from bench_core.response import Response
-from bench_core.results import RunStore
-from bench_core.runner import Route, run_benchmark
+from src.capabilities import Capabilities
+from src.request import Message, ReasoningSpec, Request, TextPart
+from src.response import Response
+from src.results import RunStore
+from src.runner import Route, run_benchmark
 
 
 def _route(adapter, provider="test", caps=None):
@@ -46,7 +46,7 @@ class MapAdapter:
         return Response(text=raw["text"])
 
     def classify_error(self, exc):
-        from bench_core.errors import classify
+        from src.errors import classify
 
         return classify(exc)
 

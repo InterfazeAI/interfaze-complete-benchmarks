@@ -14,8 +14,8 @@ import re
 import sys
 from pathlib import Path
 
-from bench_core.request import ImagePart, Message, ReasoningSpec, Request, TextPart
-from bench_core.results import model_slug
+from src.request import ImagePart, Message, ReasoningSpec, Request, TextPart
+from src.results import model_slug
 
 NAME = "olmocr"
 ID_KEY = "id"

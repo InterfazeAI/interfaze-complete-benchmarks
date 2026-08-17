@@ -6,11 +6,11 @@ retry-or-fail. A scripted fake adapter drives the error sequence — no network.
 
 import pytest
 
-from bench_core.capabilities import Capabilities
-from bench_core.errors import ErrorKind
-from bench_core.execute import BenchError, execute
-from bench_core.request import Message, ReasoningSpec, Request, TextPart
-from bench_core.response import Response
+from src.capabilities import Capabilities
+from src.errors import ErrorKind
+from src.execute import BenchError, execute
+from src.request import Message, ReasoningSpec, Request, TextPart
+from src.response import Response
 
 
 class FakeAPIError(Exception):
@@ -47,7 +47,7 @@ class ScriptedAdapter:
         return Response(text=self.final_text)
 
     def classify_error(self, exc):
-        from bench_core.errors import classify
+        from src.errors import classify
 
         return classify(exc)
 

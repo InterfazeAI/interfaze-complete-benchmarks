@@ -6,7 +6,7 @@ override again. All three collapse through `deep_merge`, then `Capabilities`
 gives the adapters a typed, validated view.
 """
 
-from bench_core.capabilities import (
+from src.capabilities import (
     AudioShape,
     Capabilities,
     ImageShape,

@@ -6,7 +6,7 @@ found report_scores dropping 5 of 7 RefCOCO runners by prefix mismatch).
 
 import json
 
-from bench_core.results import RunStore, discover, model_slug
+from src.results import RunStore, discover, model_slug
 
 
 def test_sampled_run_is_isolated_from_full_run(tmp_path):

@@ -1,7 +1,7 @@
 import sys
 import types
 
-from bench_core.datautil import load_rows
+from src.datautil import load_rows
 
 
 def _install_fake(monkeypatch, capture):

@@ -68,61 +68,61 @@ run_step() {
 # after ~233s per sample (every sample would burn 3 retries and fail), while
 # effort=none answers in ~1.3s. Transcription gains nothing from thinking.
 if [ -n "${TARGET:-}" ]; then
-  run_step asr uv run python -m bench_core run --benchmark asr --target "$TARGET"
+  run_step asr uv run python -m src run --benchmark asr --target "$TARGET"
 else
-  echo "  [skip] asr: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] asr: set TARGET=<name> (python -m src list-targets)"
 fi
 
 if [ -n "${TARGET:-}" ]; then
-  run_step spider2 uv run python -m bench_core run --benchmark spider2 --target "$TARGET"
+  run_step spider2 uv run python -m src run --benchmark spider2 --target "$TARGET"
 else
-  echo "  [skip] spider2: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] spider2: set TARGET=<name> (python -m src list-targets)"
 fi
 
 if [ -n "${TARGET:-}" ]; then
   R="$([ "$REASONING" = "high" ] && echo high || echo off)"
-  run_step mmmupro_standard uv run python -m bench_core run --benchmark mmmu_pro \
+  run_step mmmupro_standard uv run python -m src run --benchmark mmmu_pro \
     --target "$TARGET" --variant standard --reasoning "$R"
-  run_step mmmupro_vision uv run python -m bench_core run --benchmark mmmu_pro \
+  run_step mmmupro_vision uv run python -m src run --benchmark mmmu_pro \
     --target "$TARGET" --variant vision --reasoning "$R"
 else
-  echo "  [skip] mmmupro: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] mmmupro: set TARGET=<name> (python -m src list-targets)"
 fi
 
 if [ -n "${TARGET:-}" ]; then
-  run_step refcoco uv run python -m bench_core run --benchmark refcoco \
+  run_step refcoco uv run python -m src run --benchmark refcoco \
     --target "$TARGET" --variant "$REFCOCO_SPLIT"
 else
-  echo "  [skip] refcoco: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] refcoco: set TARGET=<name> (python -m src list-targets)"
 fi
 
 if [ -n "${TARGET:-}" ]; then
-  run_step olmocr uv run python -m bench_core run --benchmark olmocr --target "$TARGET"
+  run_step olmocr uv run python -m src run --benchmark olmocr --target "$TARGET"
 else
-  echo "  [skip] olmocr: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] olmocr: set TARGET=<name> (python -m src list-targets)"
 fi
 
 if [ -n "${TARGET:-}" ]; then
-  run_step mmmlu uv run python -m bench_core run --benchmark mmmlu --target "$TARGET" \
+  run_step mmmlu uv run python -m src run --benchmark mmmlu --target "$TARGET" \
     --reasoning "$([ "$REASONING" = "high" ] && echo high || echo off)"
 else
-  echo "  [skip] mmmlu: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] mmmlu: set TARGET=<name> (python -m src list-targets)"
 fi
 
 if [ -n "${TARGET:-}" ]; then
-  run_step ocrbench uv run python -m bench_core run --benchmark ocrbench_v2 --target "$TARGET"
+  run_step ocrbench uv run python -m src run --benchmark ocrbench_v2 --target "$TARGET"
 else
-  echo "  [skip] ocrbench: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] ocrbench: set TARGET=<name> (python -m src list-targets)"
 fi
 
 # Gated dataset — needs `hf auth login` plus accepted terms on the Hub.
 # GPQA now runs through the unified CLI; provider/model/reasoning come from the
-# target (bench_core/targets.yaml), so set TARGET=<name> (see `list-targets`).
+# target (src/targets.yaml), so set TARGET=<name> (see `list-targets`).
 if [ -n "${TARGET:-}" ]; then
-  run_step gpqa uv run python -m bench_core run --benchmark gpqa --target "$TARGET" \
+  run_step gpqa uv run python -m src run --benchmark gpqa --target "$TARGET" \
     --reasoning "$([ "$REASONING" = "high" ] && echo high || echo off)"
 else
-  echo "  [skip] gpqa: set TARGET=<name> (python -m bench_core list-targets)"
+  echo "  [skip] gpqa: set TARGET=<name> (python -m src list-targets)"
 fi
 
 # The format-tolerant oracle (upper bound) is now computed inline by the refcoco

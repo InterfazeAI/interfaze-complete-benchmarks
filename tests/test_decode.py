@@ -6,8 +6,8 @@ in for the SDK objects so this stays a pure unit test.
 
 from types import SimpleNamespace as NS
 
-from bench_core.capabilities import ResponseShape
-from bench_core.decode import decode_response
+from src.capabilities import ResponseShape
+from src.decode import decode_response
 
 
 def _openai_raw(

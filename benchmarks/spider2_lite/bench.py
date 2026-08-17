@@ -13,7 +13,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from bench_core.request import Message, ReasoningSpec, Request, TextPart
+from src.request import Message, ReasoningSpec, Request, TextPart
 
 NAME = "spider2_lite"
 ID_KEY = "instance_id"

@@ -8,16 +8,16 @@ import textwrap
 
 import pytest
 
-from bench_core.capabilities import AudioShape, ReasoningStyle
-from bench_core.config import (
+from src.capabilities import AudioShape, ReasoningStyle
+from src.config import (
     build_adapter,
     build_routes,
     load_all_targets,
     load_target,
     resolve_capabilities,
 )
-from bench_core.providers.gemini import GeminiAdapter
-from bench_core.providers.openai_compat import OpenAICompatAdapter
+from src.providers.gemini import GeminiAdapter
+from src.providers.openai_compat import OpenAICompatAdapter
 
 
 def _targets(tmp_path, body):

@@ -3,9 +3,9 @@ temperature gating, media blocks and the max-tokens param name all come
 together for openai / fireworks / openrouter / interfaze.
 """
 
-from bench_core.capabilities import Capabilities
-from bench_core.providers.openai_compat import OpenAICompatAdapter
-from bench_core.request import ImagePart, Message, ReasoningSpec, Request, TextPart
+from src.capabilities import Capabilities
+from src.providers.openai_compat import OpenAICompatAdapter
+from src.request import ImagePart, Message, ReasoningSpec, Request, TextPart
 
 OPENAI_CAPS = Capabilities.from_dict(
     {

@@ -54,8 +54,8 @@ jobs:
           title: "Add benchmark target: ${{ github.event.inputs.name }}"
           commit-message: "feat(targets): add ${{ github.event.inputs.name }}"
           body: |
-            Adds `${{ github.event.inputs.name }}` (${{ github.event.inputs.provider }} / `${{ github.event.inputs.model_id }}`) to `bench_core/targets.yaml`.
+            Adds `${{ github.event.inputs.name }}` (${{ github.event.inputs.provider }} / `${{ github.event.inputs.model_id }}`) to `src/targets.yaml`.
 
             The entry was validated (loads, resolves capabilities, builds its adapter).
             **Merging this PR triggers the benchmark run for the new target** (benchmark.yml push trigger).
-          add-paths: bench_core/targets.yaml
+          add-paths: src/targets.yaml

@@ -23,13 +23,13 @@ FIREWORKS_API_KEY=…
 
 ## Run a benchmark
 
-Everything runs through one CLI (`bench_core`). Models are defined in
-`bench_core/targets.yaml`; add one there to benchmark a new model — no code.
+Everything runs through one CLI (`src`). Models are defined in
+`src/targets.yaml`; add one there to benchmark a new model — no code.
 
 ```bash
-uv run python -m bench_core list-targets                            # what's available
-uv run python -m bench_core run --target inkling --benchmark gpqa   # a full run
-uv run python -m bench_core run --target gpt-5.5 --benchmark ocrbench_v2 --sample 20   # smoke
+uv run python -m src list-targets                            # what's available
+uv run python -m src run --target inkling --benchmark gpqa   # a full run
+uv run python -m src run --target gpt-5.5 --benchmark ocrbench_v2 --sample 20   # smoke
 uv run python scripts/report_scores.py                              # view scores
 ```
 

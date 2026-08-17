@@ -8,9 +8,9 @@ transcript at WER~1.0). These tests pin each shape exactly.
 import base64
 import io
 
-from bench_core.capabilities import AudioShape, ImageShape
-from bench_core.media import GeminiPart, audio_block, image_block
-from bench_core.request import AudioPart, ImagePart
+from src.capabilities import AudioShape, ImageShape
+from src.media import GeminiPart, audio_block, image_block
+from src.request import AudioPart, ImagePart
 
 WAV = b"RIFF....WAVEfake-audio-bytes"
 JPEG = b"\xff\xd8\xff\xe0jpeg-bytes"
@@ -90,7 +90,7 @@ def test_encode_image_converts_rgba_to_jpeg_without_crashing():
     # transparent PNG sample doesn't crash the run (it did in 8/9 OCR variants).
     from PIL import Image
 
-    from bench_core.media import encode_image
+    from src.media import encode_image
 
     rgba = Image.new("RGBA", (10, 10), (255, 0, 0, 128))
     part = encode_image(rgba, mime="image/jpeg")
@@ -101,7 +101,7 @@ def test_encode_image_converts_rgba_to_jpeg_without_crashing():
 def test_encode_image_downscales_to_max_side():
     from PIL import Image
 
-    from bench_core.media import encode_image
+    from src.media import encode_image
 
     big = Image.new("RGB", (3000, 1500))
     part = encode_image(big, mime="image/jpeg", max_side=1536)
@@ -111,7 +111,7 @@ def test_encode_image_downscales_to_max_side():
 def test_encode_image_png_keeps_alpha():
     from PIL import Image
 
-    from bench_core.media import encode_image
+    from src.media import encode_image
 
     rgba = Image.new("RGBA", (10, 10), (0, 255, 0, 64))
     part = encode_image(rgba, mime="image/png")

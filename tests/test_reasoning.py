@@ -12,8 +12,8 @@ that currently lives as a scattered special-case:
 - Moonshot: reasoning.enabled=false + provider pin
 """
 
-from bench_core.capabilities import ReasoningCap, ReasoningStyle
-from bench_core.reasoning import build_reasoning
+from src.capabilities import ReasoningCap, ReasoningStyle
+from src.reasoning import build_reasoning
 
 
 def test_none_style_injects_nothing():

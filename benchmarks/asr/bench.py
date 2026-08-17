@@ -8,7 +8,7 @@ from typing import Any
 
 from jiwer import cer, wer
 
-from bench_core.request import AudioPart, Message, ReasoningSpec, Request, TextPart
+from src.request import AudioPart, Message, ReasoningSpec, Request, TextPart
 
 NAME = "voxpopuli_aa"
 ID_KEY = "id"

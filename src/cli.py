@@ -5,13 +5,13 @@ import asyncio
 import importlib
 import inspect
 
-from bench_core.config import (
+from src.config import (
     build_routes,
     load_all_targets,
     load_target,
 )
-from bench_core.results import RunStore
-from bench_core.runner import run_benchmark
+from src.results import RunStore
+from src.runner import run_benchmark
 
 BENCHMARKS = {
     "gpqa": "benchmarks.gpqa.bench",

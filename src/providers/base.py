@@ -3,11 +3,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from bench_core.capabilities import Capabilities
-from bench_core.decode import decode_response
-from bench_core.errors import Classification, classify
-from bench_core.request import Request
-from bench_core.response import Response
+from src.capabilities import Capabilities
+from src.decode import decode_response
+from src.errors import Classification, classify
+from src.request import Request
+from src.response import Response
 
 
 class ProviderAdapter:
