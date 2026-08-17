@@ -177,7 +177,7 @@ async def generate_outputs(data_dir: Path):
     print(f"Done: {num_success} succeeded, {num_failed} failed")
 
     try:
-        from src.commons_reducto import write_usage_snapshot
+        from src.providers.reducto import write_usage_snapshot
 
         write_usage_snapshot(USAGE_OUTPUT)
         print(f"Usage written to {USAGE_OUTPUT}")

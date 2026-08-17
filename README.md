@@ -23,7 +23,7 @@ FIREWORKS_API_KEY=…
 
 ## Run a benchmark
 
-Everything runs through one CLI (`src`). Models are defined in
+Everything runs through one CLI (`python -m src`). Models are defined in
 `src/targets.yaml`; add one there to benchmark a new model — no code.
 
 ```bash
