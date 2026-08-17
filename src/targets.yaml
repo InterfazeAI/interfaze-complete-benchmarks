@@ -51,10 +51,24 @@ targets:
     capabilities:
       reasoning: { style: thinking_budget, off_value: 0, on_value: -1, true_off: true }
 
+  gemini-2.5-pro:
+    provider: gemini
+    model_id: gemini-2.5-pro
+    capabilities:
+      reasoning: { style: thinking_budget, off_value: 0, on_value: -1, true_off: true }
+
+  gemini-3.1-pro-preview:
+    provider: gemini
+    model_id: gemini-3.1-pro-preview
+
   # --- OpenAI / Anthropic / Interfaze: provider defaults fit as-is ---
   gpt-5.5:
     provider: openai
     model_id: gpt-5.5
+
+  gpt-5.4-mini:
+    provider: openai
+    model_id: gpt-5.4-mini
 
   claude-sonnet-4-6:
     provider: anthropic
