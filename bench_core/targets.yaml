@@ -15,6 +15,11 @@ targets:
     model_id: thinkingmachines/inkling-small
     capabilities:
       reasoning: { extra: { toggle: effort }, off_value: none, on_value: high, true_off: true }
+    # if OpenRouter can't serve, fall back to the same weights on Fireworks
+    # (host is recorded per row; proprietary targets declare no fallbacks -> stop)
+    fallbacks:
+      - provider: fireworks
+        model_id: accounts/fireworks/models/inkling-small
 
   grok-4.3:
     provider: openrouter

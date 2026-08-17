@@ -14,6 +14,7 @@ from bench_core.providers.openai_compat import OpenAICompatAdapter
 
 # --- provider registry ----------------------------------------------------
 
+
 @dataclass
 class ProviderSpec:
     adapter_cls: type
@@ -129,6 +130,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
 
 # targets
 
+
 @dataclass
 class Target:
     name: str
@@ -137,6 +139,9 @@ class Target:
     capabilities: dict = field(default_factory=dict)
     overrides: dict = field(default_factory=dict)
     harness_specific: dict = field(default_factory=dict)
+    fallbacks: list = field(
+        default_factory=list
+    )  # ordered alternate {provider, model_id, capabilities?}
     raw: dict = field(default_factory=dict)
 
 
@@ -159,6 +164,15 @@ def load_all_targets(path: str | Path = DEFAULT_TARGETS_FILE) -> dict[str, Targe
             )
         if not spec.get("model_id"):
             raise ValueError(f"target {name!r}: missing model_id")
+        fallbacks = spec.get("fallbacks") or []
+        for fb in fallbacks:
+            if fb.get("provider") not in PROVIDERS:
+                raise ValueError(
+                    f"target {name!r}: fallback provider {fb.get('provider')!r} "
+                    f"unknown; known: {sorted(PROVIDERS)}"
+                )
+            if not fb.get("model_id"):
+                raise ValueError(f"target {name!r}: fallback missing model_id")
         out[name] = Target(
             name=name,
             provider=provider,
@@ -166,6 +180,7 @@ def load_all_targets(path: str | Path = DEFAULT_TARGETS_FILE) -> dict[str, Targe
             capabilities=spec.get("capabilities") or {},
             overrides=spec.get("overrides") or {},
             harness_specific=spec.get("harness_specific") or {},
+            fallbacks=fallbacks,
             raw=spec,
         )
     return out
@@ -203,3 +218,35 @@ def build_adapter(target: Target):
         key_spec=list(spec.key_spec),
         capability_defaults=spec.capability_defaults,
     )
+
+
+def build_routes(
+    target: Target, benchmark: str | None = None, cli_overrides: dict | None = None
+):
+    """Ordered provider routes: the primary, then each declared fallback. Each
+    route resolves its OWN provider's adapter + capabilities. A proprietary
+    target with no fallbacks yields a single route (so it stops on failure)."""
+    from bench_core.runner import Route
+
+    specs = [target] + [
+        Target(
+            name=target.name,
+            provider=fb["provider"],
+            model_id=fb["model_id"],
+            capabilities=fb.get("capabilities") or {},
+            overrides=target.overrides,
+            raw=fb,
+        )
+        for fb in target.fallbacks
+    ]
+    return [
+        Route(
+            provider=t.provider,
+            model_id=t.model_id,
+            adapter=build_adapter(t),
+            caps=resolve_capabilities(
+                t, benchmark=benchmark, cli_overrides=cli_overrides
+            ),
+        )
+        for t in specs
+    ]

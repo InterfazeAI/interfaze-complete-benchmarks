@@ -6,9 +6,12 @@ build_adapter maps the provider to the right adapter class.
 
 import textwrap
 
+import pytest
+
 from bench_core.capabilities import AudioShape, ReasoningStyle
 from bench_core.config import (
     build_adapter,
+    build_routes,
     load_all_targets,
     load_target,
     resolve_capabilities,
@@ -158,3 +161,53 @@ def test_build_adapter_maps_provider_to_class(tmp_path):
     assert "fireworks_api_key" in [k.lower() for k in a.key_spec]
     assert a.base_url and "fireworks" in a.base_url
     assert isinstance(build_adapter(load_target("b", path)), GeminiAdapter)
+
+
+def test_fallbacks_build_ordered_routes_with_own_caps(tmp_path):
+    path = _targets(
+        tmp_path,
+        """
+        inkling-small:
+          provider: openrouter
+          model_id: thinkingmachines/inkling-small
+          fallbacks:
+            - provider: fireworks
+              model_id: accounts/fireworks/models/inkling-small
+        """,
+    )
+    routes = build_routes(load_target("inkling-small", path))
+    assert [(r.provider, r.model_id) for r in routes] == [
+        ("openrouter", "thinkingmachines/inkling-small"),
+        ("fireworks", "accounts/fireworks/models/inkling-small"),
+    ]
+    # each route resolves its OWN provider's caps, not the primary's
+    assert routes[0].caps.reasoning.style is ReasoningStyle.REASONING_BODY
+    assert routes[1].caps.reasoning.style is ReasoningStyle.EFFORT
+
+
+def test_no_fallbacks_is_single_route(tmp_path):
+    path = _targets(
+        tmp_path,
+        """
+        solo:
+          provider: interfaze
+          model_id: interfaze-x
+        """,
+    )
+    assert len(build_routes(load_target("solo", path))) == 1
+
+
+def test_fallback_is_validated(tmp_path):
+    path = _targets(
+        tmp_path,
+        """
+        bad:
+          provider: openrouter
+          model_id: or/x
+          fallbacks:
+            - provider: nope
+              model_id: y
+        """,
+    )
+    with pytest.raises(ValueError):
+        load_all_targets(path)

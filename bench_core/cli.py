@@ -6,10 +6,9 @@ import importlib
 import inspect
 
 from bench_core.config import (
-    build_adapter,
+    build_routes,
     load_all_targets,
     load_target,
-    resolve_capabilities,
 )
 from bench_core.results import RunStore
 from bench_core.runner import run_benchmark
@@ -37,13 +36,19 @@ def cmd_run(args) -> None:
     target = load_target(args.target)
     bench = _import_benchmark(args.benchmark)
     mode = args.reasoning or bench.DEFAULTS.get("reasoning", "off")
-    caps = resolve_capabilities(target, benchmark=args.benchmark)
-    adapter = build_adapter(target)
-    if not adapter.resolve_key():
-        raise SystemExit(
-            f"no API key for provider {target.provider!r} (looked for {adapter.key_spec})"
-        )
-    client = adapter.build_client()
+    # primary provider + ordered fallbacks; keep only routes whose key is present
+    routes = build_routes(target, benchmark=args.benchmark)
+    live = []
+    for rt in routes:
+        if rt.adapter.resolve_key():
+            rt.client = rt.adapter.build_client()
+            live.append(rt)
+        else:
+            print(
+                f"skipping route {rt.provider} (no API key; looked for {rt.adapter.key_spec})"
+            )
+    if not live:
+        raise SystemExit(f"no API key for any route of target {target.name!r}")
 
     variants = getattr(bench, "VARIANTS", None)
     if variants:
@@ -70,10 +75,7 @@ def cmd_run(args) -> None:
 
     result = asyncio.run(
         run_benchmark(
-            adapter=adapter,
-            client=client,
-            caps=caps,
-            model_id=target.model_id,
+            routes=live,
             samples=samples,
             build_request=lambda s: bench.build_request(s, mode),
             parse=bench.parse,
@@ -84,10 +86,18 @@ def cmd_run(args) -> None:
         )
     )
 
+    responses = store.load_responses()
+    hosts: dict = {}
+    for r in responses:
+        h = r.get("host")
+        if h:
+            hosts[h] = hosts.get(h, 0) + 1
+
     score_kwargs = {}
     if "target" in inspect.signature(bench.score).parameters:
         score_kwargs["target"] = target
-    metrics = bench.score(store.load_responses(), samples, **score_kwargs)
+    caps = live[0].caps  # primary (first available) route's resolved caps
+    metrics = bench.score(responses, samples, **score_kwargs)
     metrics.update(
         {
             "benchmark": result_name,
@@ -100,6 +110,7 @@ def cmd_run(args) -> None:
                 "style": caps.reasoning.style.value,
                 "true_off": caps.reasoning.true_off,
             },
+            "hosts": hosts,  # which provider(s) actually served the rows
             "capability_hints": result.hints,
         }
     )
@@ -108,6 +119,7 @@ def cmd_run(args) -> None:
         {
             "provider": target.provider,
             "model_id": target.model_id,
+            "routes": [rt.provider for rt in live],  # providers available this run
             "reasoning_mode": mode,
             "n_completed": result.n_completed,
             "n_failed": result.n_failed,

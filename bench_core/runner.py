@@ -1,4 +1,5 @@
-"""The one execution harness: rate-limit, semaphore, retry, resume, checkpoint."""
+"""The one execution harness: rate-limit, worker pool, provider failover, retry,
+resume, checkpoint."""
 
 from __future__ import annotations
 
@@ -10,6 +11,19 @@ from bench_core.execute import BenchError, execute
 from bench_core.results import RunStore
 
 _RETRYABLE = {ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT, ErrorKind.EMPTY_CONTENT}
+# Advance to the next provider route only when the host itself won't serve.
+# NOT on EMPTY_CONTENT: the backup runs the same weights and returns the same
+# empty output, so failing over there just doubles the bill for a dead sample.
+_FAILOVER = {ErrorKind.FATAL, ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT}
+
+
+@dataclass
+class Route:
+    provider: str
+    model_id: str
+    adapter: object
+    caps: object
+    client: object = None
 
 
 @dataclass
@@ -48,10 +62,7 @@ class _RateLimiter:
 
 async def run_benchmark(
     *,
-    adapter,
-    client,
-    caps,
-    model_id: str,
+    routes: list[Route],
     samples,
     build_request,
     parse,
@@ -77,24 +88,44 @@ async def run_benchmark(
 
     async def process(sample):
         req = build_request(sample)
-        for attempt in range(max_retries + 1):
-            await limiter.acquire()
-            try:
-                resp, hints = await asyncio.to_thread(
-                    execute, adapter, client, req, caps, model_id
+        last_err = None
+        for route in routes:
+            outcome = None
+            for attempt in range(max_retries + 1):
+                await limiter.acquire()
+                try:
+                    resp, hints = await asyncio.to_thread(
+                        execute,
+                        route.adapter,
+                        route.client,
+                        req,
+                        route.caps,
+                        route.model_id,
+                    )
+                except BenchError as be:
+                    last_err = be
+                    kind = be.classification.kind
+                    if kind in _RETRYABLE and attempt < max_retries:
+                        if backoff_base > 0:
+                            await asyncio.sleep(backoff_base * (2**attempt))
+                        continue
+                    outcome = kind
+                    break
+                await _record_success(
+                    sample,
+                    resp,
+                    hints,
+                    parse,
+                    store,
+                    result,
+                    lock,
+                    id_key,
+                    route.provider,
                 )
-            except BenchError as be:
-                kind = be.classification.kind
-                if kind in _RETRYABLE and attempt < max_retries:
-                    if backoff_base > 0:
-                        await asyncio.sleep(backoff_base * (2**attempt))
-                    continue
-                await _record_failure(sample, be, store, result, lock, id_key)
                 return
-            await _record_success(
-                sample, resp, hints, parse, store, result, lock, id_key
-            )
-            return
+            if outcome not in _FAILOVER:
+                break  # a genuine non-answer from this host; a backup won't help
+        await _record_failure(sample, last_err, store, result, lock, id_key)
 
     # Bounded worker pool: build_request runs only when a worker pulls a sample,
     # so at most max_in_flight requests (and their decoded images) exist at once.
@@ -116,13 +147,16 @@ async def run_benchmark(
     return result
 
 
-async def _record_success(sample, resp, hints, parse, store, result, lock, id_key):
+async def _record_success(
+    sample, resp, hints, parse, store, result, lock, id_key, host
+):
     prediction = parse(resp, sample)
     record = {
         id_key: sample[id_key],
         "response": resp.text,
         "prediction": prediction,
         "reasoning_tokens": resp.reasoning_tokens,
+        "host": host,  # which provider actually served this row (failover audit)
     }
     if hints:
         record["capability_hints"] = hints

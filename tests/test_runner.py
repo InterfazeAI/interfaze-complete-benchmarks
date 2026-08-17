@@ -8,7 +8,13 @@ from bench_core.capabilities import Capabilities
 from bench_core.request import Message, ReasoningSpec, Request, TextPart
 from bench_core.response import Response
 from bench_core.results import RunStore
-from bench_core.runner import run_benchmark
+from bench_core.runner import Route, run_benchmark
+
+
+def _route(adapter, provider="test", caps=None):
+    return Route(
+        provider=provider, model_id="m", adapter=adapter, caps=caps, client=None
+    )
 
 
 class FakeAPIError(Exception):
@@ -60,10 +66,7 @@ def _parse(resp, sample):
 
 async def _run(adapter, samples, store, **kw):
     return await run_benchmark(
-        adapter=adapter,
-        client=None,
-        caps=CAPS,
-        model_id="m",
+        routes=[_route(adapter, caps=CAPS)],
         samples=samples,
         build_request=_build_request,
         parse=_parse,
@@ -136,10 +139,7 @@ async def test_build_request_is_bounded_by_max_in_flight(tmp_path):
         return resp.text
 
     await run_benchmark(
-        adapter=adapter,
-        client=None,
-        caps=CAPS,
-        model_id="m",
+        routes=[_route(adapter, caps=CAPS)],
         samples=[{"id": i} for i in ids],
         build_request=build_request,
         parse=parse,
@@ -170,10 +170,7 @@ async def test_capability_hints_are_aggregated(tmp_path):
         }
     )
     result = await run_benchmark(
-        adapter=adapter,
-        client=None,
-        caps=caps,
-        model_id="m",
+        routes=[_route(adapter, caps=caps)],
         samples=[{"id": "a"}],
         build_request=_build_request,
         parse=_parse,
@@ -181,3 +178,72 @@ async def test_capability_hints_are_aggregated(tmp_path):
         backoff_base=0.0,
     )
     assert any("floor" in h.lower() for h in result.hints)
+
+
+async def test_failover_to_next_route_on_fatal(tmp_path):
+    dead = MapAdapter({"a": [FakeAPIError(404, "no such model")]})  # FATAL
+    live = MapAdapter({"a": ["ok"]})
+    store = RunStore("t", "m", root=tmp_path)
+    routes = [_route(dead, "openrouter", CAPS), _route(live, "fireworks", CAPS)]
+    result = await run_benchmark(
+        routes=routes,
+        samples=[{"id": "a"}],
+        build_request=_build_request,
+        parse=_parse,
+        store=store,
+        backoff_base=0.0,
+    )
+    assert result.n_completed == 1
+    rec = store.load_responses()[0]
+    assert rec["host"] == "fireworks"  # served by the fallback, recorded
+    assert live.calls["a"] == 1
+
+
+async def test_no_failover_on_empty_content(tmp_path):
+    # EMPTY_CONTENT on every retry: the backup runs the same weights, so failing
+    # over would just double the bill — it must NOT be tried.
+    empty = MapAdapter({"a": ["", "", "", ""]})
+    backup = MapAdapter({"a": ["ok"]})
+    store = RunStore("t", "m", root=tmp_path)
+    routes = [_route(empty, "openrouter", CAPS), _route(backup, "fireworks", CAPS)]
+    result = await run_benchmark(
+        routes=routes,
+        samples=[{"id": "a"}],
+        build_request=_build_request,
+        parse=_parse,
+        store=store,
+        backoff_base=0.0,
+        max_retries=3,
+    )
+    assert result.n_failed == 1
+    assert "a" not in backup.calls  # backup never called
+
+
+async def test_all_routes_fail_records_failure(tmp_path):
+    d1 = MapAdapter({"a": [FakeAPIError(404, "x")]})
+    d2 = MapAdapter({"a": [FakeAPIError(404, "y")]})
+    store = RunStore("t", "m", root=tmp_path)
+    result = await run_benchmark(
+        routes=[_route(d1, "openrouter", CAPS), _route(d2, "fireworks", CAPS)],
+        samples=[{"id": "a"}],
+        build_request=_build_request,
+        parse=_parse,
+        store=store,
+        backoff_base=0.0,
+    )
+    assert result.n_failed == 1
+    assert d2.calls["a"] == 1  # the last route was tried
+
+
+async def test_single_route_records_host(tmp_path):
+    live = MapAdapter({"a": ["ok"]})
+    store = RunStore("t", "m", root=tmp_path)
+    await run_benchmark(
+        routes=[_route(live, "interfaze", CAPS)],
+        samples=[{"id": "a"}],
+        build_request=_build_request,
+        parse=_parse,
+        store=store,
+        backoff_base=0.0,
+    )
+    assert store.load_responses()[0]["host"] == "interfaze"
