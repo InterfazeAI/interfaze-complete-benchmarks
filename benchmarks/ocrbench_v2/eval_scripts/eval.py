@@ -107,9 +107,11 @@ def process_predictions(input_path, output_path):
             # Infer eval method when missing
             eval_type = data_item.get("eval")
             if not eval_type:
-                if (len(data_item["answers"]) == 1
+                if (
+                    len(data_item["answers"]) == 1
                     and len(data_item["answers"][0]) <= 2
-                    and data_item["answers"][0].isalpha()):
+                    and data_item["answers"][0].isalpha()
+                ):
                     eval_type = "multiple choice"
             if eval_type == "multiple choice":
                 if not isinstance(data_item["answers"], list):
@@ -119,9 +121,7 @@ def process_predictions(input_path, output_path):
                 if not isinstance(data_item["predict"], str):
                     data_item["score"] = 0
                 else:
-                    predict = "".join(
-                        c for c in data_item["predict"] if c.isalpha()
-                    )
+                    predict = "".join(c for c in data_item["predict"] if c.isalpha())
 
                     if predict == data_item["answers"][0]:
                         data_item["score"] = 1
@@ -468,7 +468,11 @@ def process_predictions(input_path, output_path):
         elif data_item["type"] == "text spotting en":
             # Parse bbox/content from answers if not present (HF dataset format)
             # GT format: variable-length polygons (8, 12, 16, 28+ coords) followed by text
-            if "bbox" not in data_item and "answers" in data_item and data_item["answers"]:
+            if (
+                "bbox" not in data_item
+                and "answers" in data_item
+                and data_item["answers"]
+            ):
                 bboxes, contents = [], []
                 for line in data_item["answers"][0].strip().split("\n"):
                     parts = line.split(",")
@@ -489,9 +493,13 @@ def process_predictions(input_path, output_path):
                         x2, y2 = max(x_coords), max(y_coords)
                         bboxes.append([x1, y1, x2, y1, x2, y2, x1, y2])
                         contents.append(text)
-                    elif num_coords >= 8 and num_coords == len(parts) and num_coords % 2 == 1:
+                    elif (
+                        num_coords >= 8
+                        and num_coords == len(parts)
+                        and num_coords % 2 == 1
+                    ):
                         # All-numeric text (e.g. "1700"): odd coord count means last is text
-                        coords = [int(p.strip()) for p in parts[:num_coords - 1]]
+                        coords = [int(p.strip()) for p in parts[: num_coords - 1]]
                         text = parts[num_coords - 1].strip()
                         x_coords = coords[0::2]
                         y_coords = coords[1::2]
@@ -510,7 +518,9 @@ def process_predictions(input_path, output_path):
                 if not predict_bbox:
                     data_item["score"] = 0
                 else:
-                    data_item["score"] = spotting_evaluation_normalized(predict_bbox, data_item)
+                    data_item["score"] = spotting_evaluation_normalized(
+                        predict_bbox, data_item
+                    )
 
         else:
             raise ValueError("Unknown task type!")

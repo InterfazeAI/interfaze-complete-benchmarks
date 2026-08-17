@@ -1,4 +1,4 @@
-"""Normalized response — one shape regardless of host."""
+# Normalized response — one shape regardless of host.
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""The fallback ladder: one request through an adapter, self-healing declared-cap gaps."""
+# The fallback ladder: one request through an adapter, self-healing declared-cap gaps.
 
 from __future__ import annotations
 
@@ -50,8 +50,6 @@ def _force_reasoning_floor(caps: Capabilities) -> tuple[Capabilities, str]:
 def _apply_action(
     c: Classification, req: Request, caps: Capabilities
 ) -> tuple[Request, Capabilities, str] | None:
-    """Return a mutated (req, caps, hint), or None if the action can't be
-    applied here (escalates to fatal)."""
     if c.action == "raise_thinking_floor":
         caps, hint = _raise_thinking_floor(caps)
         return req, caps, hint

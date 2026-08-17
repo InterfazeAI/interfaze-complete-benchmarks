@@ -47,11 +47,7 @@ def extract_bounding_boxes(predict_str):
                         continue
 
                     text_content = (
-                        str(item[4])
-                        .replace("\n", "")
-                        .strip()
-                        .strip('"')
-                        .strip("'")
+                        str(item[4]).replace("\n", "").strip().strip('"').strip("'")
                     )
 
                     # Normalize inverted coordinates
@@ -186,7 +182,7 @@ def process_predictions(input_path, output_path):
                     # Polygons always have even number of coords (pairs of x,y)
                     if num_coords % 2 == 1:
                         # Odd count means last "coord" is actually the text
-                        coords = [int(p.strip()) for p in parts[:num_coords - 1]]
+                        coords = [int(p.strip()) for p in parts[: num_coords - 1]]
                         text = parts[num_coords - 1].strip()
                         x_coords = coords[0::2]
                         y_coords = coords[1::2]

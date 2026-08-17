@@ -1,5 +1,3 @@
-"""The single result contract: one slug, one layout, one content-based discovery."""
-
 from __future__ import annotations
 
 import json
@@ -12,13 +10,7 @@ DEFAULT_ROOT = Path("results")
 
 
 def model_slug(name: str) -> str:
-    """The ONE slug rule. Strip any provider path, then collapse to
-    lowercase-dash — so fireworks/openrouter/google spellings of the same model
-    resolve to the same directory."""
     leaf = name.rsplit("/", 1)[-1]
-    # Preserve dots/underscores/dashes (filesystem-safe and keeps version numbers
-    # like "3.7" intact) so the slug matches the target's YAML `name` and no
-    # un-mangling step is ever needed. Only collapse genuinely unsafe chars.
     return re.sub(r"[^a-z0-9._-]+", "-", leaf.lower()).strip("-")
 
 
@@ -76,8 +68,6 @@ class RunStore:
 
 
 def discover(root: Path | str = DEFAULT_ROOT) -> list[dict]:
-    """Every metrics.json under the layout — content-based, the single source
-    the report reads."""
     root = Path(root)
     out = []
     for path in sorted(root.glob("*/*/metrics.json")):

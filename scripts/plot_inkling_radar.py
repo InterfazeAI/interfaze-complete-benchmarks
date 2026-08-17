@@ -75,7 +75,6 @@ def load_measured():
         return json.loads(p.read_text()) if p.exists() else None
 
     ocr = j("ocrbench_v2_fireworks_inkling_metrics.json")
-    olm = j("olmocr_fireworks_inkling_metrics.json")
     gpqa = j("fireworks_inkling_thinkingoff_gpqa_diamond_metrics.json")
     mmmu = j(
         "mmmupro_standard_fireworks_accounts-fireworks-models-inkling_reasoningoff_metrics.json"

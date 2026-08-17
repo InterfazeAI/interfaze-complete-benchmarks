@@ -48,8 +48,11 @@ def main():
             "OCRBench V2",
             f"{ocr['en_overall'] * 100:.2f}",
             "",
-            "Inkling = EN overall, n=10000. Sheet row says Thinking OFF; Inkling cannot "
-            "disable thinking, this is reasoning_effort=none (its floor). Small: not measured.",
+            (
+                "Inkling = EN overall, n=10000. Sheet row says Thinking OFF; Inkling "
+                "cannot disable thinking, this is reasoning_effort=none (its floor). "
+                "Small: not measured."
+            ),
         ),
         (
             "olmOCR",
@@ -61,16 +64,20 @@ def main():
             "RefCoco",
             "",
             "",
-            "BLANK ON PURPOSE: this row is TestA; our run is val "
-            f"(strict {32.37:.2f}, format-tolerant oracle {81.19:.2f}). Not the same split — "
-            "say the word and I'll run TestA to fill it properly.",
+            (
+                "BLANK ON PURPOSE: this row is TestA; our run is val "
+                f"(strict {32.37:.2f}, format-tolerant oracle {81.19:.2f}). Not the "
+                "same split — say the word and I'll run TestA to fill it properly."
+            ),
         ),
         (
             "VoxPoppuliCleaned-AA",
             f"{(1 - asr['corpus_wer']) * 100:.2f}",
             "",
-            "Reported as 1-WER to match this row's scale (corpus WER 4.61%, n=628). "
-            "Small: not measured.",
+            (
+                "Reported as 1-WER to match this row's scale (corpus WER 4.61%, "
+                "n=628). Small: not measured."
+            ),
         ),
         (
             "TheSOB",
@@ -82,31 +89,40 @@ def main():
             "Spider-2.0-lite",
             f"{spider['accuracy_of_local_135'] * 100:.2f}",
             "",
-            "64/135 SQLite subset. 5 of the 71 misses hit a 120s per-query cap added to the "
-            "scorer. Small: not measured.",
+            (
+                "64/135 SQLite subset. 5 of the 71 misses hit a 120s per-query cap "
+                "added to the scorer. Small: not measured."
+            ),
         ),
         (
             "GPQA-Diamond",
             f"{gpqa['accuracy'] * 100:.2f}",
             "88.30",
-            "CONFIG MISMATCH: this row is Thinking On; our Inkling run is the floor "
-            "(mean 6537 reasoning tokens/sample even so). Small 88.30 is Thinking Machines' "
-            "PUBLISHED figure at effort=0.99, NOT our measurement.",
+            (
+                "CONFIG MISMATCH: this row is Thinking On; our Inkling run is the "
+                "floor (mean 6537 reasoning tokens/sample even so). Small 88.30 is "
+                "Thinking Machines' PUBLISHED figure at effort=0.99, NOT our measurement."
+            ),
         ),
         (
             "MMMLU",
             f"{mmmlu['macro_accuracy'] * 100:.2f}",
             "",
-            "CONFIG MISMATCH: row is Thinking On; ours is the floor. Macro over 14 langs, "
-            "n=19950. Small: not measured.",
+            (
+                "CONFIG MISMATCH: row is Thinking On; ours is the floor. Macro over "
+                "14 langs, n=19950. Small: not measured."
+            ),
         ),
         (
             "MMMU-Pro",
             f"{mmmu_composite:.2f}",
             "73.10",
-            f"Inkling = standard+vision composite ({mmmu_std['accuracy'] * 100:.2f} / "
-            f"{mmmu_vis['accuracy'] * 100:.2f}), the published convention. Small 73.10 is the "
-            "PUBLISHED standard-setting figure, not measured, and not a composite.",
+            (
+                f"Inkling = standard+vision composite ({mmmu_std['accuracy'] * 100:.2f}"
+                f" / {mmmu_vis['accuracy'] * 100:.2f}), the published convention. Small "
+                "73.10 is the PUBLISHED standard-setting figure, not measured, and not "
+                "a composite."
+            ),
         ),
     ]
 
@@ -122,8 +138,6 @@ def main():
     print(f"\nwrote {OUT}")
 
 
-
-
 # ---------------------------------------------------------------------------
 # Extra tabs. The "running" tab above is one column per model; these tabs are
 # one ROW per model, with sub-scores as columns. Emitted as separate TSV blocks
@@ -136,7 +150,9 @@ OUT_TABS = RESULTS / "sheet_inkling_tabs.tsv"
 def emit_tabs():
     ocr = j("ocrbench_v2_fireworks_inkling_metrics.json")
     gpqa = j("fireworks_inkling_thinkingoff_gpqa_diamond_metrics.json")
-    mmmlu = j("mmmlulite_fireworks_accounts-fireworks-models-inkling_reasoningoff_metrics.json")
+    mmmlu = j(
+        "mmmlulite_fireworks_accounts-fireworks-models-inkling_reasoningoff_metrics.json"
+    )
     spider = j("spider2_lite_local_fireworks_inkling_metrics.json")
     en = ocr["en_scores"]
 
@@ -148,46 +164,124 @@ def emit_tabs():
     # --- OCRBench V2 tab: model | Avg Real | Recog | Refer | Spot | Extract
     #     | Parse | Calc | Understand | Reason   (EN scores; matches the tab's
     #     Interfaze row, whose Avg Real equals the running-tab OCRBench value)
-    blocks.append(("OCRBench V2 tab",
-        ["model", "Avg Real", "Recog", "Refer", "Spot", "Extract", "Parse",
-         "Calc", "Understand", "Reason"],
-        ["Inkling", p(ocr["en_overall"]),
-         p(en["text_recognition"]["avg"]), p(en["text_detection"]["avg"]),
-         p(en["text_spotting"]["avg"]), p(en["relationship_extraction"]["avg"]),
-         p(en["element_parsing"]["avg"]), p(en["mathematical_calculation"]["avg"]),
-         p(en["visual_text_understanding"]["avg"]), p(en["knowledge_reasoning"]["avg"])]))
+    blocks.append(
+        (
+            "OCRBench V2 tab",
+            [
+                "model",
+                "Avg Real",
+                "Recog",
+                "Refer",
+                "Spot",
+                "Extract",
+                "Parse",
+                "Calc",
+                "Understand",
+                "Reason",
+            ],
+            [
+                "Inkling",
+                p(ocr["en_overall"]),
+                p(en["text_recognition"]["avg"]),
+                p(en["text_detection"]["avg"]),
+                p(en["text_spotting"]["avg"]),
+                p(en["relationship_extraction"]["avg"]),
+                p(en["element_parsing"]["avg"]),
+                p(en["mathematical_calculation"]["avg"]),
+                p(en["visual_text_understanding"]["avg"]),
+                p(en["knowledge_reasoning"]["avg"]),
+            ],
+        )
+    )
 
     # --- olmOCR tab. olmOCR-bench prints its per-split table to stdout instead
     #     of persisting a metrics file, so these come from the run log
     #     (logs/fireworks_inkling/olmocr.log, 1403/1403 pages, 8413 tests).
-    blocks.append(("olmOCR tab",
-        ["model", "Overall", "ArXiv", "OldScansMath", "Tables", "OldScans",
-         "Headers", "MultiCol", "LongTinyText", "Base", "Real Overall"],
-        ["Inkling", "74.90", "71.20", "78.80", "82.60", "41.60", "91.60",
-         "72.40", "61.80", "99.10", "74.9±1.1"]))
+    blocks.append(
+        (
+            "olmOCR tab",
+            [
+                "model",
+                "Overall",
+                "ArXiv",
+                "OldScansMath",
+                "Tables",
+                "OldScans",
+                "Headers",
+                "MultiCol",
+                "LongTinyText",
+                "Base",
+                "Real Overall",
+            ],
+            [
+                "Inkling",
+                "74.90",
+                "71.20",
+                "78.80",
+                "82.60",
+                "41.60",
+                "91.60",
+                "72.40",
+                "61.80",
+                "99.10",
+                "74.9±1.1",
+            ],
+        )
+    )
 
     # --- GPQA tab: model | Overall | Physics (n=86) | Chemistry (n=93) | Biology (n=19)
     d = gpqa["per_domain"]
-    blocks.append(("GPQA tab",
-        ["model", "Overall", "Physics (n=86)", "Chemistry (n=93)", "Biology (n=19)"],
-        ["Inkling", p(gpqa["accuracy"]), p(d["Physics"]["accuracy"]),
-         p(d["Chemistry"]["accuracy"]), p(d["Biology"]["accuracy"])]))
+    blocks.append(
+        (
+            "GPQA tab",
+            [
+                "model",
+                "Overall",
+                "Physics (n=86)",
+                "Chemistry (n=93)",
+                "Biology (n=19)",
+            ],
+            [
+                "Inkling",
+                p(gpqa["accuracy"]),
+                p(d["Physics"]["accuracy"]),
+                p(d["Chemistry"]["accuracy"]),
+                p(d["Biology"]["accuracy"]),
+            ],
+        )
+    )
 
     # --- MMMLU tab: languages are ROWS and models are COLUMNS, so this is a
     #     column (macro first, then the 14 languages in the sheet's order).
-    order = ["FR_FR", "PT_BR", "BN_BD", "JA_JP", "DE_DE", "YO_NG", "ES_LA",
-             "ID_ID", "ZH_CN", "SW_KE", "IT_IT", "AR_XY", "KO_KR", "HI_IN"]
+    order = [
+        "FR_FR",
+        "PT_BR",
+        "BN_BD",
+        "JA_JP",
+        "DE_DE",
+        "YO_NG",
+        "ES_LA",
+        "ID_ID",
+        "ZH_CN",
+        "SW_KE",
+        "IT_IT",
+        "AR_XY",
+        "KO_KR",
+        "HI_IN",
+    ]
     pl = mmmlu["per_language"]
-    blocks.append(("MMMLU tab (column: macro then langs)",
-        ["lang", "Inkling"],
-        None))
+    blocks.append(("MMMLU tab (column: macro then langs)", ["lang", "Inkling"], None))
     mmmlu_rows = [["macro", p(mmmlu["macro_accuracy"])]]
     mmmlu_rows += [[lg, p(pl[lg]["accuracy"])] for lg in order if lg in pl]
 
     # --- Spider-2.0 tab: Model | Spider-2.0-lite
-    blocks.append(("Spider-2.0 tab",
-        ["Model", "Spider-2.0-lite"],
-        ["Inkling", p(spider["accuracy_of_local_135"])]))
+    blocks.append(
+        (
+            "Spider-2.0 tab",
+            ["Model", "Spider-2.0-lite"],
+            ["Inkling", p(spider["accuracy_of_local_135"])],
+        )
+    )
 
     lines = []
     for title, header, row in blocks:

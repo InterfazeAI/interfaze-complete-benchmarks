@@ -85,6 +85,7 @@ def run_reducto(
     )
     try:
         from src.commons_reducto import record_usage
+
         record_usage("parse", getattr(response, "usage", None))
     except Exception:
         pass

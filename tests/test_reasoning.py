@@ -76,7 +76,10 @@ def test_effort_intermediate_mode_passes_through():
 
 def test_gemini_37_flash_thinking_level_floor_is_low():
     cap = ReasoningCap(
-        style=ReasoningStyle.THINKING_LEVEL, off_value="low", on_value="high", true_off=False
+        style=ReasoningStyle.THINKING_LEVEL,
+        off_value="low",
+        on_value="high",
+        true_off=False,
     )
     inj = build_reasoning("off", cap)
     assert inj.thinking_level == "low"
@@ -85,7 +88,10 @@ def test_gemini_37_flash_thinking_level_floor_is_low():
 
 def test_gemini_old_flash_thinking_level_floor_is_minimal():
     cap = ReasoningCap(
-        style=ReasoningStyle.THINKING_LEVEL, off_value="minimal", on_value="high", true_off=False
+        style=ReasoningStyle.THINKING_LEVEL,
+        off_value="minimal",
+        on_value="high",
+        true_off=False,
     )
     assert build_reasoning("off", cap).thinking_level == "minimal"
 

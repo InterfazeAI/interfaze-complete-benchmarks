@@ -39,7 +39,10 @@ def ensure_repo() -> None:
     print(f"[clone] xlang-ai/Spider2 (depth=1) -> {REPO_DIR}")
     subprocess.run(
         [
-            "git", "clone", "--depth", "1",
+            "git",
+            "clone",
+            "--depth",
+            "1",
             "https://github.com/xlang-ai/Spider2.git",
             str(REPO_DIR),
         ],
@@ -58,7 +61,10 @@ def ensure_sqlite_dbs() -> None:
         try:
             import gdown
         except ImportError:
-            print("ERROR: `gdown` is required to download from Google Drive.", file=sys.stderr)
+            print(
+                "ERROR: `gdown` is required to download from Google Drive.",
+                file=sys.stderr,
+            )
             print("       Add it with `uv add gdown` and re-run.", file=sys.stderr)
             sys.exit(1)
         print(f"[download] Google Drive id={SQLITE_ZIP_DRIVE_ID} -> {zip_path}")

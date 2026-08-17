@@ -6,9 +6,7 @@ from enum import Enum
 
 
 class ErrorKind(str, Enum):
-    PARAM_REJECTED = (
-        "param_rejected"
-    )
+    PARAM_REJECTED = "param_rejected"
     RATE_LIMITED = "rate_limited"
     TRANSIENT = "transient"  # timeout / 5xx / connection -> backoff + retry
     EMPTY_CONTENT = "empty_content"

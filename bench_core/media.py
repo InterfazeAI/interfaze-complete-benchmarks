@@ -1,4 +1,4 @@
-"""Media block builders — one per host shape (image + audio)."""
+# Media block builders — one per host shape (image + audio).
 
 from __future__ import annotations
 
@@ -11,12 +11,9 @@ from bench_core.capabilities import AudioShape, ImageShape
 from bench_core.request import AudioPart, ImagePart
 
 
+#Marker for a native `google.genai` part
 @dataclass(frozen=True)
 class GeminiPart:
-    """Marker for a native `google.genai` part. Kept SDK-free here so media
-    logic is testable without the SDK; the Gemini adapter maps it to
-    `types.Part.from_bytes(data=..., mime_type=...)`."""
-
     data: bytes
     mime: str
 
@@ -83,9 +80,6 @@ def image_block(part: ImagePart, shape: ImageShape) -> Any:
 def encode_image(
     pil_image, mime: str = "image/jpeg", max_side: int | None = None
 ) -> ImagePart:
-    """PIL image -> ImagePart, doing the conversions every consumer needs once:
-    RGB-convert for JPEG (JPEG can't hold alpha; the omission crashed 8/9 OCR
-    variants on RGBA/P images), optional longest-side downscale, then encode."""
     from PIL import Image
 
     img = pil_image
@@ -94,7 +88,7 @@ def encode_image(
         longest = max(w, h)
         if longest > max_side:
             scale = max_side / longest
-            img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+            img = img.resize((round(w * scale), round(h * scale)), Image.Resampling.LANCZOS)
 
     fmt = _subtype(mime).upper()
     if fmt in ("JPG", "JPEG"):

@@ -16,7 +16,7 @@ on:
         description: "reasoning override: off|low|medium|high (blank = benchmark default)"
         default: ""
   schedule:
-    - cron: "0 6 * * 1" # weekly (Mon) plumbing health check — only ci_regression targets
+    - cron: "0 6 * * 1"
   push:
     branches: [main]
     paths: [bench_core/targets.yaml] # a merged target change runs a full benchmark for it
@@ -104,7 +104,6 @@ jobs:
 
   report:
     needs: [plan, run]
-    # only when something actually ran; skip the runner entirely on a no-op push
     if: always() && needs.plan.outputs.has_work == 'true'
     runs-on: ubuntu-latest
     steps:

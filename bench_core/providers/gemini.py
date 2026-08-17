@@ -48,7 +48,9 @@ class GeminiAdapter(ProviderAdapter):
         inj = build_reasoning(req.reasoning.mode, caps.reasoning)
         thinking = None
         if inj.thinking_level is not None:
-            thinking = types.ThinkingConfig(thinking_level=types.ThinkingLevel(inj.thinking_level))
+            thinking = types.ThinkingConfig(
+                thinking_level=types.ThinkingLevel(inj.thinking_level)
+            )
         elif inj.thinking_budget is not None:
             thinking = types.ThinkingConfig(thinking_budget=inj.thinking_budget)
 

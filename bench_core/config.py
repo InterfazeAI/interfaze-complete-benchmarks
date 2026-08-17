@@ -12,8 +12,6 @@ from bench_core.providers.anthropic import AnthropicAdapter
 from bench_core.providers.gemini import GeminiAdapter
 from bench_core.providers.openai_compat import OpenAICompatAdapter
 
-# --- provider registry ----------------------------------------------------
-
 
 @dataclass
 class ProviderSpec:
@@ -130,7 +128,6 @@ PROVIDERS: dict[str, ProviderSpec] = {
 
 # targets
 
-
 @dataclass
 class Target:
     name: str
@@ -223,9 +220,6 @@ def build_adapter(target: Target):
 def build_routes(
     target: Target, benchmark: str | None = None, cli_overrides: dict | None = None
 ):
-    """Ordered provider routes: the primary, then each declared fallback. Each
-    route resolves its OWN provider's adapter + capabilities. A proprietary
-    target with no fallbacks yields a single route (so it stops on failure)."""
     from bench_core.runner import Route
 
     specs = [target] + [

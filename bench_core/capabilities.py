@@ -10,47 +10,24 @@ from typing import Any
 
 
 class ReasoningStyle(str, Enum):
-    """How a host expresses "think this much".
-
-    The vocabulary is genuinely different per host — this enum names the
-    mechanism so the adapter can translate an abstract mode into the concrete
-    param without a benchmark-level `if provider == ...`.
-    """
-
-    EFFORT = (
-        "effort"  # OpenAI/Fireworks/Interfaze: reasoning_effort="none|low|high|..."
-    )
-    THINKING_LEVEL = "thinking_level"  # Gemini 3.x: thinking_config.thinking_level enum
-    THINKING_BUDGET = (
-        "thinking_budget"  # Gemini 2.5: thinking_config.thinking_budget int
-    )
-    DISABLED_BLOCK = (
-        "disabled_block"  # Anthropic: thinking={"type":"disabled"|"enabled"}
-    )
-    REASONING_BODY = (
-        "reasoning_body"  # OpenRouter: extra_body.reasoning{enabled|effort}
-    )
+    EFFORT = "effort"  # OpenAI/Fireworks/Interfaze: reasoning_effort
+    THINKING_LEVEL = "thinking_level"  # Gemini 3.x: thinking_config.thinking_level
+    THINKING_BUDGET = "thinking_budget"  # Gemini 2.5: thinking_budget int
+    DISABLED_BLOCK = "disabled_block"  # Anthropic: thinking type disabled/enabled
+    REASONING_BODY = "reasoning_body"  # OpenRouter: extra_body.reasoning
     NONE = "none"  # non-reasoning model: send nothing
 
 
 class AudioShape(str, Enum):
-    FILE_BLOCK = (
-        "file_block"  # Interfaze: {"type":"file","file":{"file_data": data-uri}}
-    )
-    AUDIO_URL = (
-        "audio_url"  # Fireworks: {"type":"audio_url","audio_url":{"url": data-uri}}
-    )
-    INPUT_AUDIO = (
-        "input_audio"  # OpenRouter: {"type":"input_audio","input_audio":{data,format}}
-    )
-    GEMINI_PART = "gemini_part"  # Gemini: types.Part.from_bytes(mime_type="audio/...")
+    FILE_BLOCK = "file_block"  # Interfaze: file block, data-uri
+    AUDIO_URL = "audio_url"  # Fireworks: audio_url data-uri
+    INPUT_AUDIO = "input_audio"  # OpenRouter: input_audio {data, format}
+    GEMINI_PART = "gemini_part"  # Gemini: Part.from_bytes(mime_type="audio/...")
     NONE = "none"
 
 
 class ImageShape(str, Enum):
-    IMAGE_URL = (
-        "image_url"  # OpenAI-family: {"type":"image_url","image_url":{"url": data-uri}}
-    )
+    IMAGE_URL = "image_url"  # OpenAI-family: image_url data-uri
     ANTHROPIC_SOURCE = "anthropic_source"  # {"type":"image","source":{base64}}
     GEMINI_PART = "gemini_part"  # types.Part.from_bytes(mime_type="image/...")
     NONE = "none"
@@ -63,12 +40,6 @@ class ResponseShape(str, Enum):
 
 
 def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict:
-    """Recursively merge `override` onto `base`, returning a new dict.
-
-    Nested dicts merge key-by-key; every other value (scalar, list) is replaced
-    wholesale by `override`. Neither input is mutated — the resolution chain
-    (adapter defaults ← target ← CLI) reuses the same base dict repeatedly.
-    """
     result = copy.deepcopy(dict(base))
     for key, val in override.items():
         existing = result.get(key)

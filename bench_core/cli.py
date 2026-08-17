@@ -13,7 +13,6 @@ from bench_core.config import (
 from bench_core.results import RunStore
 from bench_core.runner import run_benchmark
 
-# benchmark short-name -> module exposing NAME/load_samples/build_request/parse/score
 BENCHMARKS = {
     "gpqa": "benchmarks.gpqa.bench",
     "asr": "benchmarks.asr.bench",
@@ -66,10 +65,8 @@ def cmd_run(args) -> None:
         result_name = bench.NAME
 
     print(f"Loading {result_name} samples...")
-    # sampled runs are smokes: isolate them under results/_smoke/ so they can
-    # never clobber or shadow a full run's metrics (results/ is gitignored, so a
-    # clobbered full-run metrics.json would be unrecoverable).
-    root = "results" if args.sample is None else "results/_smoke"
+
+    root = "results" if args.sample is None else "results/_smoke" # sampled runs are smokes, so isolated
     store = RunStore(result_name, target.name, root=root)
     d = bench.DEFAULTS
 
@@ -147,7 +144,6 @@ def cmd_list_targets(args) -> None:
 
 
 def main(argv=None) -> None:
-    # pick up provider keys from a repo-root .env (adapters read os.getenv)
     try:
         from dotenv import load_dotenv
 

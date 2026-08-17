@@ -1,4 +1,4 @@
-"""Provider-agnostic request the benchmark layer builds."""
+# Provider-agnostic request the benchmark layer builds.
 
 from __future__ import annotations
 

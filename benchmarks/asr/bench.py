@@ -1,9 +1,10 @@
-"""VoxPopuli-Cleaned-AA ASR: transcribe audio, score corpus + time-weighted WER."""
+# VoxPopuli-Cleaned-AA ASR: transcribe audio, score corpus + time-weighted WER.
 
 from __future__ import annotations
 
 import re
 import unicodedata
+from typing import Any
 
 from jiwer import cer, wer
 
@@ -92,7 +93,7 @@ def _sample_metric(fn, gt_norm: str, hyp_norm: str) -> float:
 
 def score(records: list[dict], samples: list[dict]) -> dict:
     by_id = {s["id"]: s for s in samples}
-    rows = []
+    rows: list[dict[str, Any]] = []
     for r in records:
         s = by_id.get(r["id"])
         if s is None:

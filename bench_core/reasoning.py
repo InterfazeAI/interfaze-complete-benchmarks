@@ -1,9 +1,9 @@
-"""Translate an abstract reasoning mode into the host's concrete directive."""
+# Translate an abstract reasoning mode into the host's concrete directive.
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, assert_never
 
 from bench_core.capabilities import ReasoningCap, ReasoningStyle
 
@@ -89,4 +89,6 @@ def build_reasoning(mode: str, cap: ReasoningCap) -> ReasoningInjection:
             extra_body["provider"] = {"only": list(pin)}
         return ReasoningInjection(extra_body=extra_body, allow_temperature=allow_temp)
 
-    raise ValueError(f"unhandled reasoning style {style!r}")
+    assert_never(
+        style
+    )  # exhaustive over ReasoningStyle; ty errors if a member is added

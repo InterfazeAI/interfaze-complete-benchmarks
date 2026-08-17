@@ -37,7 +37,7 @@ jobs:
           enable-cache: true
       - run: uv sync
       - name: Validate + append target
-        env: # via env, not inline ${{ }}, so JSON quotes can't break/inject the shell
+        env:
           T_NAME: ${{ github.event.inputs.name }}
           T_PROVIDER: ${{ github.event.inputs.provider }}
           T_MODEL: ${{ github.event.inputs.model_id }}

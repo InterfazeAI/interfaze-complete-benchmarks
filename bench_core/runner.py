@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
+from bench_core.capabilities import Capabilities
 from bench_core.errors import ErrorKind
 from bench_core.execute import BenchError, execute
 from bench_core.results import RunStore
@@ -22,7 +23,7 @@ class Route:
     provider: str
     model_id: str
     adapter: object
-    caps: object
+    caps: Capabilities
     client: object = None
 
 

@@ -1,4 +1,4 @@
-"""GPQA Diamond: 198 expert MCQs; deterministic choice shuffle; letter-match accuracy."""
+# GPQA Diamond: 198 expert MCQs; deterministic choice shuffle; letter-match accuracy.
 
 from __future__ import annotations
 

@@ -1265,6 +1265,7 @@ dependencies = [
     { name = "pymupdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
+    { name = "reducto" },
     { name = "ruff" },
     { name = "scikit-image" },
     { name = "scipy" },
@@ -1318,6 +1319,7 @@ requires-dist = [
     { name = "pymupdf", specifier = ">=1.27.2" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "reducto", specifier = ">=0.22.0" },
     { name = "ruff", specifier = ">=0.15.5" },
     { name = "scikit-image", specifier = ">=0.21.0" },
     { name = "scipy", specifier = ">=1.10.0" },
@@ -3241,6 +3243,35 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/bb/ce/ff942d19fce5385054650bb71a58495ddda299d94661ccc4e6e7fa44868b/rapidfuzz-3.14.5-cp314-cp314t-win32.whl", hash = "sha256:0f23e37019ec07712d58976b1ab2b889f8649a7f7c2f626a2f34ea9139e79279", size = 1803950, upload-time = "2026-04-07T11:16:10.873Z" },
     { url = "https://files.pythonhosted.org/packages/5c/0f/9aafc63f9661222b819b391c187eed29fc90ad5935f9690e5ecc2d2047a4/rapidfuzz-3.14.5-cp314-cp314t-win_amd64.whl", hash = "sha256:7d5ca9c7832e6879a707296d1463685f7c243a27846227044504741640caec66", size = 1632357, upload-time = "2026-04-07T11:16:13.1Z" },
     { url = "https://files.pythonhosted.org/packages/70/a6/51fc1b0e61e3326e1c68a61cfd0c6b3c34c843681c4b1eefbf0596f59162/rapidfuzz-3.14.5-cp314-cp314t-win_arm64.whl", hash = "sha256:3e91dcd2549b8f8d843f98ba03a17e01f3d8b72ce942adbbb6761bc58ffce813", size = 855409, upload-time = "2026-04-07T11:16:15.787Z" },
+]
+
+[[package]]
+name = "reducto"
+version = "0.22.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "reductoai" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/84/38/c629dcc4ca3854841b59f692ae4faf2ba58e93a6599413269117253c4c19/reducto-0.22.0.tar.gz", hash = "sha256:02afd1fc733a7869cf59432d114a517cd6a532d0cb10c639db76484380b8fd20", size = 1853, upload-time = "2026-04-17T00:55:26.913Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/98/c2f13eae75d58e38b01157a7c2e0a3109ead4b1c62f9a284a0faf0bb1de2/reducto-0.22.0-py3-none-any.whl", hash = "sha256:b60bee016daffd37d7c3955229ebc4d53df0811280a6c1d37afc2c662db2c9b9", size = 1785, upload-time = "2026-04-17T00:55:25.679Z" },
+]
+
+[[package]]
+name = "reductoai"
+version = "0.22.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2d/56/fc608656c68c261a2c61056d5fa8f59440a6a023b8071a5295a10654b4b9/reductoai-0.22.0.tar.gz", hash = "sha256:77965a930627f4f440fe7d7dbe7318c643da589e4c1fefbb2d4106b15af77a71", size = 313933, upload-time = "2026-03-29T01:25:49.705Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/bb/fa663e679011a91f41012cb66aa18e14278ea617868a769369895efd70d0/reductoai-0.22.0-py3-none-any.whl", hash = "sha256:a0c8d9c0372c49d618da83304f62ed0da0aae57fe37abd4072dbe87e206aa2e6", size = 154407, upload-time = "2026-03-29T01:25:48.356Z" },
 ]
 
 [[package]]

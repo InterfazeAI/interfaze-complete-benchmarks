@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 from collections import defaultdict
+from typing import Any
 
 from bench_core.media import encode_image
 from bench_core.request import Message, ReasoningSpec, Request, TextPart
@@ -19,7 +20,7 @@ _DATASET_REPO = "MMMU/MMMU_Pro"
 _SPLIT = "test"
 _CONFIGS = {"standard": "standard (10 options)", "vision": "vision"}
 _MAX_IMAGE_SIDE = 1536
-_DATASET = None  # full-run split; images read lazily by idx to bound memory
+_DATASET: Any = None  # full-run split; images read lazily by idx to bound memory
 _LETTERS = list("ABCDEFGHIJ")
 
 _PROMPT_STANDARD = (
@@ -131,7 +132,7 @@ def build_request(sample: dict, mode: str) -> Request:
         prompt = _PROMPT_STANDARD.format(
             question=sample["question"], options=_options_block(sample["options"])
         )
-    parts = [TextPart(prompt)]
+    parts: list = [TextPart(prompt)]
     parts += [
         encode_image(im, "image/jpeg", max_side=_MAX_IMAGE_SIDE) for im in pil_images
     ]

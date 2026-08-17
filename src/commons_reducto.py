@@ -2,8 +2,9 @@ import copy
 import json
 import os
 import threading
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
@@ -18,7 +19,9 @@ if (REDUCTO_API_KEY := os.getenv("REDUCTO_API_KEY", None)) is None:
     )
 
 
-reducto_client = Reducto(api_key=REDUCTO_API_KEY)
+reducto_client: Any = Reducto(
+    api_key=REDUCTO_API_KEY
+)  # SDK stubs are strict; used dynamically
 
 
 # ---------- Usage tracking (thread-safe) ----------------------------------

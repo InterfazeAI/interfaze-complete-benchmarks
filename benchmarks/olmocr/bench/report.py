@@ -10,7 +10,11 @@ from .tests import BasePDFTest
 
 
 def generate_html_report(
-    test_results_by_candidate: Dict[str, Dict[str, Dict[int, List[Tuple[BasePDFTest, bool, str]]]]], pdf_folder: str, output_file: str
+    test_results_by_candidate: Dict[
+        str, Dict[str, Dict[int, List[Tuple[BasePDFTest, bool, str]]]]
+    ],
+    pdf_folder: str,
+    output_file: str,
 ) -> None:
     """
     Generate a simple static HTML report of test results.
@@ -153,7 +157,11 @@ def generate_html_report(
                     elif test_type == "absent" and hasattr(test, "text"):
                         text = getattr(test, "text", "")
                         html += f"""            <p><strong>Text should not appear:</strong> "{text}"</p>\n"""
-                    elif test_type == "order" and hasattr(test, "before") and hasattr(test, "after"):
+                    elif (
+                        test_type == "order"
+                        and hasattr(test, "before")
+                        and hasattr(test, "after")
+                    ):
                         before = getattr(test, "before", "")
                         after = getattr(test, "after", "")
                         html += f"""            <p><strong>Text order:</strong> "{before}" should appear before "{after}"</p>\n"""
@@ -198,9 +206,19 @@ def generate_html_report(
                     md_content = None
                     try:
                         md_base = os.path.splitext(pdf_name)[0]
-                        md_files = list(glob.glob(os.path.join(os.path.dirname(pdf_folder), candidate, f"{md_base}_pg{page}_repeat*.md")))
+                        md_files = list(
+                            glob.glob(
+                                os.path.join(
+                                    os.path.dirname(pdf_folder),
+                                    candidate,
+                                    f"{md_base}_pg{page}_repeat*.md",
+                                )
+                            )
+                        )
                         if md_files:
-                            md_file_path = md_files[0]  # Use the first repeat as an example
+                            md_file_path = md_files[
+                                0
+                            ]  # Use the first repeat as an example
                             with open(md_file_path, "r", encoding="utf-8") as f:
                                 md_content = f.read()
                     except Exception as e:

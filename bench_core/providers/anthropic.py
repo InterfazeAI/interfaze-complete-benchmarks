@@ -61,7 +61,11 @@ class AnthropicAdapter(ProviderAdapter):
 
         thinking_on = (inj.anthropic_thinking or {}).get("type") == "enabled"
         if thinking_on:
-            budget = inj.anthropic_thinking.get("budget_tokens", 0) if inj.anthropic_thinking else 0
+            budget = (
+                inj.anthropic_thinking.get("budget_tokens", 0)
+                if inj.anthropic_thinking
+                else 0
+            )
             max_tokens = req.max_tokens or extra.get("on_max_tokens", _DEFAULT_ON_MAX)
             if max_tokens <= budget:
                 max_tokens = budget + _BUDGET_MARGIN

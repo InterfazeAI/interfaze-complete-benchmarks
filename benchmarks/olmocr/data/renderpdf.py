@@ -6,7 +6,9 @@ from typing import List
 from PIL import Image
 
 
-def get_pdf_media_box_width_height(local_pdf_path: str, page_num: int) -> tuple[float, float]:
+def get_pdf_media_box_width_height(
+    local_pdf_path: str, page_num: int
+) -> tuple[float, float]:
     """
     Get the MediaBox dimensions for a specific page in a PDF file using the pdfinfo command.
 
@@ -15,10 +17,22 @@ def get_pdf_media_box_width_height(local_pdf_path: str, page_num: int) -> tuple[
     :return: A dictionary containing MediaBox dimensions or None if not found
     """
     # Construct the pdfinfo command to extract info for the specific page
-    command = ["pdfinfo", "-f", str(page_num), "-l", str(page_num), "-box", "-enc", "UTF-8", local_pdf_path]
+    command = [
+        "pdfinfo",
+        "-f",
+        str(page_num),
+        "-l",
+        str(page_num),
+        "-box",
+        "-enc",
+        "UTF-8",
+        local_pdf_path,
+    ]
 
     # Run the command using subprocess
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
 
     # Check if there is any error in executing the command
     if result.returncode != 0:
@@ -36,7 +50,9 @@ def get_pdf_media_box_width_height(local_pdf_path: str, page_num: int) -> tuple[
     raise ValueError("MediaBox not found in the PDF info.")
 
 
-def render_pdf_to_base64png(local_pdf_path: str, page_num: int, target_longest_image_dim: int = 2048) -> str:
+def render_pdf_to_base64png(
+    local_pdf_path: str, page_num: int, target_longest_image_dim: int = 2048
+) -> str:
     longest_dim = max(get_pdf_media_box_width_height(local_pdf_path, page_num))
 
     # Convert PDF page to PNG using pdftoppm
@@ -49,7 +65,9 @@ def render_pdf_to_base64png(local_pdf_path: str, page_num: int, target_longest_i
             "-l",
             str(page_num),
             "-r",
-            str(target_longest_image_dim * 72 / longest_dim),  # 72 pixels per point is the conversion factor
+            str(
+                target_longest_image_dim * 72 / longest_dim
+            ),  # 72 pixels per point is the conversion factor
             local_pdf_path,
         ],
         timeout=120,
@@ -60,7 +78,9 @@ def render_pdf_to_base64png(local_pdf_path: str, page_num: int, target_longest_i
     return base64.b64encode(pdftoppm_result.stdout).decode("utf-8")
 
 
-def render_pdf_to_base64webp(local_pdf_path: str, page: int, target_longest_image_dim: int = 1024):
+def render_pdf_to_base64webp(
+    local_pdf_path: str, page: int, target_longest_image_dim: int = 1024
+):
     base64_png = render_pdf_to_base64png(local_pdf_path, page, target_longest_image_dim)
 
     png_image = Image.open(io.BytesIO(base64.b64decode(base64_png)))

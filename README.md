@@ -33,12 +33,7 @@ uv run python -m bench_core run --target gpt-5.5 --benchmark ocrbench_v2 --sampl
 uv run python scripts/report_scores.py                              # view scores
 ```
 
-`--sample N` runs the first N samples — a *smoke*. It **streams** only those N
-rows, so smoking a heavy image benchmark (e.g. `ocrbench_v2`, ~10k images) no
-longer downloads the whole split first. Smokes write to `results/_smoke/…`,
-isolated from full runs and hidden from `report_scores.py`, so they can't clobber
-a real score. Omit `--sample` for the full benchmark. Re-running resumes from the
-checkpoint. Add `--reasoning off|low|medium|high` to override the target's default.
+`--sample N` runs the first N samples — a *smoke*. It **streams** only those N rows, so smoking a heavy image benchmark (e.g. `ocrbench_v2`, ~10k images) no longer downloads the whole split first. Smokes write to `results/_smoke/…`, isolated from full runs and hidden from `report_scores.py`, so they can't clobber a real score. Omit `--sample` for the full benchmark. Re-running resumes from the checkpoint. Add `--reasoning off|low|medium|high` to override the target's default.
 
 > A **full** image-benchmark run loads the whole split into RAM (RefCOCO `val` ≈
 > 8.8k images → several GB). Smoke with `--sample` first; if a full local run runs

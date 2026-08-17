@@ -20,7 +20,12 @@ LEVEL_CAPS = Capabilities.from_dict(
 )
 BUDGET_CAPS = Capabilities.from_dict(
     {
-        "reasoning": {"style": "thinking_budget", "off_value": 0, "on_value": -1, "true_off": True},
+        "reasoning": {
+            "style": "thinking_budget",
+            "off_value": 0,
+            "on_value": -1,
+            "true_off": True,
+        },
         "media": {"image": "gemini_part"},
         "response": "gemini_text",
     }

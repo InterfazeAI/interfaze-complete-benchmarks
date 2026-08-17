@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from typing import Any
 
 from bench_core.media import encode_image
 from bench_core.request import Message, ReasoningSpec, Request, TextPart
@@ -37,7 +38,7 @@ _DATASETS = {
     "g": "lmms-lab/RefCOCOg",
 }
 _MAX_SIDE = 1024
-_DATASET = None  # full-run split; images read lazily by idx to bound memory
+_DATASET: Any = None  # full-run split; images read lazily by idx to bound memory
 IOU_THRESHOLD = 0.5
 _THRESHOLDS = [0.3, 0.5, 0.7, 0.75, 0.9]
 

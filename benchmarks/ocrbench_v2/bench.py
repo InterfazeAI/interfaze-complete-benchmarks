@@ -13,6 +13,7 @@ import sys
 import tempfile
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from bench_core.media import encode_image
 from bench_core.request import Message, ReasoningSpec, Request, TextPart
@@ -78,7 +79,7 @@ TYPE_TO_CN = {
 EN_CATEGORIES = list(dict.fromkeys(TYPE_TO_EN.values()))
 CN_CATEGORIES = list(dict.fromkeys(TYPE_TO_CN.values()))
 
-_DATASET = None  # lazily-held so images decode per request, not all 10k upfront
+_DATASET: Any = None  # lazily-held so images decode per request, not all 10k upfront
 
 
 def get_spotting_prompt(question: str) -> str:
