@@ -13,6 +13,7 @@ import io
 import json
 import re
 import sys
+import tempfile
 from pathlib import Path, PurePosixPath
 
 from src.request import ImagePart, Message, ReasoningSpec, Request, TextPart
@@ -25,7 +26,10 @@ DEFAULTS = {"reasoning": "off", "rate_limit": 25, "max_in_flight": 8}
 
 _HF_REPO = "allenai/olmOCR-bench"
 _FULL_DATA_DIR = Path(__file__).resolve().parent / "bench" / "full_data"
-_LOGS_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
+_REPO = Path(__file__).resolve().parent.parent.parent
+_LOGS_DIR = _REPO / "logs"
+# outside logs/, which report_scores reads as real scores
+_SMOKE_LOGS_DIR = _REPO / "results" / "_smoke" / "logs"
 _SPLITS = [
     "arxiv_math",
     "headers_footers",
@@ -148,10 +152,46 @@ class _Tee:
             s.flush()
 
 
-def score(records: list[dict], samples: list[dict], target=None) -> dict:
+def score(
+    records: list[dict], samples: list[dict], target=None, smoke: bool = False
+) -> dict:
     candidate = model_slug(target.name) if target is not None else "candidate"
+    if not smoke:
+        return _score_in(_FULL_DATA_DIR, records, samples, candidate, _LOGS_DIR)
+    # A smoke scores only its pages, away from full-run outputs in _FULL_DATA_DIR.
+    with tempfile.TemporaryDirectory() as td:
+        data_dir = _smoke_data_dir(Path(td), samples)
+        return _score_in(data_dir, records, samples, candidate, _SMOKE_LOGS_DIR)
+
+
+def _smoke_data_dir(root: Path, samples: list[dict]) -> Path:
+    """A scorer data dir holding only the sampled pages' PDFs and tests."""
+    pages = {(s["id"].rsplit("#", 1)[0], s["page"]) for s in samples}
+    for jsonl in _FULL_DATA_DIR.glob("*.jsonl"):
+        kept = []
+        for line in jsonl.read_text().splitlines():
+            if line.strip():
+                test = json.loads(line)
+                if (test["pdf"], test["page"]) in pages:
+                    kept.append(line)
+        if kept:
+            (root / jsonl.name).write_text("\n".join(kept) + "\n")
+    for pdf_rel in {pdf for pdf, _ in pages}:
+        link = root / "pdfs" / pdf_rel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(_FULL_DATA_DIR / "pdfs" / pdf_rel)
+    return root
+
+
+def _score_in(
+    data_dir: Path,
+    records: list[dict],
+    samples: list[dict],
+    candidate: str,
+    logs_dir: Path,
+) -> dict:
     by_id = {s["id"]: s for s in samples}
-    out_root = _FULL_DATA_DIR / candidate
+    out_root = data_dir / candidate
     # materialize per-page .md from the run records (the scorer reads these)
     for r in records:
         s = by_id.get(r["id"])
@@ -163,14 +203,14 @@ def score(records: list[dict], samples: list[dict], target=None) -> dict:
 
     from olmocr.bench.benchmark import main as bench_main
 
-    _LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = _LOGS_DIR / f"olmocr_{candidate}.log"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_path = logs_dir / f"olmocr_{candidate}.log"
     buf = io.StringIO()
     argv, real = sys.argv, sys.stdout
     sys.argv = [
         "benchmark",
         "--dir",
-        str(_FULL_DATA_DIR),
+        str(data_dir),
         "--candidate",
         candidate,
         "--force",

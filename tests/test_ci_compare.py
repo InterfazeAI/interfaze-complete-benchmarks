@@ -44,3 +44,11 @@ def test_smoke_run_is_found_under_smoke_root_and_not_judged(tmp_path):
     assert "smoke (n=5 vs 198)" in rows[0][4]
     assert warnings == []
 
+
+def test_smoke_without_n_is_not_judged(tmp_path):
+    # ocrbench/olmocr/spider2 metrics written before n fell back to the sample count
+    _write(tmp_path / "results" / "_smoke", "ocrbench_v2", "m", {"en_overall": 0.0})
+    _write(tmp_path / "base", "ocrbench_v2", "m", {"en_overall": 0.6})
+    rows, warnings = compare_target("m", 0.02, tmp_path / "results", tmp_path / "base")
+    assert "smoke (n=None vs None)" in rows[0][4]
+    assert warnings == []

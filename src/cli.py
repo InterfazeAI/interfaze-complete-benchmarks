@@ -98,9 +98,9 @@ def cmd_run(args) -> None:
     responses = store.load_responses()
     hosts = dict(Counter(r["host"] for r in responses if r.get("host")))
 
-    score_kwargs = {}
-    if "target" in inspect.signature(bench.score).parameters:
-        score_kwargs["target"] = target
+    accepted = inspect.signature(bench.score).parameters
+    optional_kwargs = {"target": target, "smoke": smoke}
+    score_kwargs = {k: v for k, v in optional_kwargs.items() if k in accepted}
     caps = live[0].caps  # primary (first available) route's resolved caps
     metrics = bench.score(responses, samples, **score_kwargs)
     metrics.update(
@@ -109,7 +109,7 @@ def cmd_run(args) -> None:
             "target": target.name,
             "provider": target.provider,
             "model_id": target.model_id,
-            "n": metrics.get("total") or metrics.get("num_samples"),
+            "n": metrics.get("total") or metrics.get("num_samples") or len(samples),
             "reasoning": {
                 "mode": mode,
                 "style": caps.reasoning.style.value,

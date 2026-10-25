@@ -147,19 +147,21 @@ def _run_per_sample_scorer(preds: list[dict]) -> list[dict]:
     eval_dir = _BENCH_DIR / "eval_scripts"
     if str(eval_dir) not in sys.path:
         sys.path.insert(0, str(eval_dir))
-    from benchmarks.ocrbench_v2.eval_scripts.eval import process_predictions
+    cwd = os.getcwd()
+    # Import from here too: nltk>=3.10 refuses dependency imports from under the CWD,
+    # which the repo-root .venv is when run from the repo root.
+    os.chdir(_BENCH_DIR)
+    try:
+        from benchmarks.ocrbench_v2.eval_scripts.eval import process_predictions
 
-    with tempfile.TemporaryDirectory() as td:
-        pred_path = Path(td) / "pred.json"
-        scored_path = Path(td) / "scored.json"
-        pred_path.write_text(json.dumps(preds, ensure_ascii=False))
-        cwd = os.getcwd()
-        os.chdir(_BENCH_DIR)
-        try:
+        with tempfile.TemporaryDirectory() as td:
+            pred_path = Path(td) / "pred.json"
+            scored_path = Path(td) / "scored.json"
+            pred_path.write_text(json.dumps(preds, ensure_ascii=False))
             process_predictions(str(pred_path), str(scored_path))
-        finally:
-            os.chdir(cwd)
-        return json.loads(scored_path.read_text())
+            return json.loads(scored_path.read_text())
+    finally:
+        os.chdir(cwd)
 
 
 def aggregate(scored: list[dict]) -> dict:

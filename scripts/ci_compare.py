@@ -7,8 +7,8 @@ deterministic (reasoning models, SQL-timeout boundaries).
 
 Baseline = the tracked baselines/<benchmark>/<target>/metrics.json (results/ is
 gitignored); move it by copying in a full run's metrics.json. "Fresh" = results/
-(incl. results/_smoke/) after the run. Smokes (n far below baseline) are reported
-but not judged.
+(incl. results/_smoke/) after the run. Smokes (under _smoke/, or n far below the
+baseline's) are reported but not judged.
 """
 
 from __future__ import annotations
@@ -58,7 +58,8 @@ def compare_target(
     for mpath in sorted(fresh_paths):
         fresh = json.loads(mpath.read_text())
         rel = mpath.relative_to(results)
-        if rel.parts[0] == "_smoke":  # smokes compare against the full-run baseline
+        is_smoke = rel.parts[0] == "_smoke"
+        if is_smoke:  # smokes compare against the full-run baseline
             rel = rel.relative_to("_smoke")
         base_path = baselines / rel
         base = json.loads(base_path.read_text()) if base_path.exists() else None
@@ -72,7 +73,7 @@ def compare_target(
         delta = (new - old) if (new is not None and old is not None) else None
         base_n = base.get("n")
         note = ""
-        if base_n and n and n < base_n * 0.5:
+        if is_smoke or (base_n and n and n < base_n * 0.5):
             note = f"smoke (n={n} vs {base_n})"
         elif delta is not None:
             regressed = (delta < -tolerance) if higher else (delta > tolerance)

@@ -4,6 +4,7 @@ No offline score replay (the scorer needs the full dataset), so parity rests on
 pinning the prompt, null handling and the log parser.
 """
 
+import json
 import pathlib
 from types import SimpleNamespace as NS
 
@@ -61,3 +62,24 @@ def test_parse_scores_without_summary_line_is_empty():
         "splits": {},
     }
 
+
+def test_smoke_data_dir_holds_only_sampled_pages(tmp_path, monkeypatch):
+    full = tmp_path / "full"
+    (full / "pdfs" / "split").mkdir(parents=True)
+    for name in ("a.pdf", "b.pdf"):
+        (full / "pdfs" / "split" / name).write_bytes(b"%PDF")
+    tests = [{"pdf": "split/a.pdf", "page": 1}, {"pdf": "split/b.pdf", "page": 1}]
+    (full / "split.jsonl").write_text("\n".join(json.dumps(t) for t in tests) + "\n")
+    (full / "other.jsonl").write_text(json.dumps(tests[1]) + "\n")
+    monkeypatch.setattr(bench, "_FULL_DATA_DIR", full)
+
+    smoke = tmp_path / "smoke"
+    smoke.mkdir()
+    bench._smoke_data_dir(smoke, [{"id": "split/a.pdf#1", "page": 1}])
+
+    assert sorted(p.name for p in smoke.glob("*.jsonl")) == ["split.jsonl"]
+    assert json.loads((smoke / "split.jsonl").read_text()) == tests[0]
+    assert [p.name for p in (smoke / "pdfs" / "split").iterdir()] == ["a.pdf"]
+    assert (smoke / "pdfs" / "split" / "a.pdf").resolve() == (
+        full / "pdfs" / "split" / "a.pdf"
+    )
