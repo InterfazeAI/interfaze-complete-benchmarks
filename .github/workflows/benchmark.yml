@@ -99,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: metrics-${{ matrix.target }}-${{ matrix.benchmark }}
-          path: results/${{ matrix.benchmark }}*/${{ matrix.target }}/metrics.json
+          path: results/**/metrics.json # this job's output only; covers _smoke/ and asr's voxpopuli_aa dir
           if-no-files-found: ignore
 
   report:
@@ -119,8 +119,9 @@ jobs:
           merge-multiple: true
       - name: Overlay fresh metrics onto the contract
         run: |
-          # artifacts store their original results/<bench>/<target>/metrics.json path
-          if [ -d incoming/results ]; then cp -r incoming/results/* results/; fi
+          # artifacts keep the path below results/: [_smoke/]<bench>/<target>/metrics.json
+          mkdir -p results
+          if [ -d incoming ]; then cp -r incoming/. results/; fi
       - name: Compare vs baseline + write summary
         run: |
           for t in ${{ needs.plan.outputs.targets }}; do

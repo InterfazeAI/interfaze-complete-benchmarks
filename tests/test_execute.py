@@ -154,3 +154,21 @@ def test_param_retries_are_bounded():
         )
     assert len(adapter.history) <= 4
 
+
+def test_unsupported_parameter_is_dropped_then_succeeds():
+    adapter = ScriptedAdapter(
+        errors=[FakeAPIError(400, "Unsupported parameter: 'toggle' is not supported")]
+    )
+    resp, hints = execute(adapter, None, _req(), _caps(), "m")
+    assert resp.text == "ok"
+    assert "toggle" in adapter.history[0]
+    assert "toggle" not in adapter.history[1]
+    assert hints == ["parameter toggle dropped (rejected by host)"]
+
+
+def test_unsupported_parameter_not_in_request_fails():
+    adapter = ScriptedAdapter(errors=[FakeAPIError(400, "Unknown parameter: 'top_k'")])
+    with pytest.raises(BenchError) as ei:
+        execute(adapter, None, _req(), _caps(), "m")
+    assert ei.value.classification.kind is ErrorKind.PARAM_REJECTED
+    assert len(adapter.history) == 1

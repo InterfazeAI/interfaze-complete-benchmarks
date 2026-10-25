@@ -30,9 +30,34 @@ def test_parse_scores_from_archived_log():
         import pytest
 
         pytest.skip("archived olmOCR log not present")
-    scores = bench._parse_scores(log.read_text(errors="ignore"))
+    scores = bench.parse_scores(log.read_text(errors="ignore"))
     assert scores["overall"] == 77.3
     assert scores["splits"]["arxiv_math"] == 86.7
     assert scores["splits"]["old_scans"] == 44.9
-    # matches report_scores.load_olmocr: the first `baseline:` line (summary block)
+    # the first `baseline:` line (summary block) wins
     assert scores["splits"]["baseline"] == 93.4
+
+
+def test_parse_scores_reads_overall_ci_and_splits():
+    text = (
+        "gemini-3-7-flash: Average Score: 77.3% ± 1.1%\r"
+        "    arxiv_math.jsonl: 86.7%\n"
+        "    baseline: 93.4%\n"
+        "    baseline: 12.0%\n"
+    )
+    assert bench.parse_scores(text) == {
+        "candidate": "gemini-3-7-flash",
+        "overall": 77.3,
+        "ci": 1.1,
+        "splits": {"arxiv_math": 86.7, "baseline": 93.4},
+    }
+
+
+def test_parse_scores_without_summary_line_is_empty():
+    assert bench.parse_scores("no table here") == {
+        "candidate": None,
+        "overall": None,
+        "ci": None,
+        "splits": {},
+    }
+

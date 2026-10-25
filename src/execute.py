@@ -73,14 +73,21 @@ def execute(
 ) -> tuple[Response, list[str]]:
     hints: list[str] = []
     work_req, work_caps = req, caps
+    dropped: set[str] = set()  # top-level request kwargs the host rejected
 
     for _ in range(max_param_retries + 1):
         encoded = adapter.encode(work_req, work_caps, model_id)
+        for name in dropped:
+            encoded.pop(name, None)
         try:
             raw = adapter.call(client, encoded)
         except Exception as exc:
             c = adapter.classify_error(exc)
             if c.kind is ErrorKind.PARAM_REJECTED:
+                if c.action == "drop_param" and c.param in encoded:
+                    dropped.add(c.param)
+                    hints.append(f"parameter {c.param} dropped (rejected by host)")
+                    continue
                 applied = _apply_action(c, work_req, work_caps)
                 if applied is not None:
                     work_req, work_caps, hint = applied

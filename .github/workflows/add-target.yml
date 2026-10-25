@@ -19,7 +19,7 @@ on:
         required: false
         default: ""
       ci_regression:
-        description: "include in the nightly regression run"
+        description: "include in the weekly regression run"
         type: boolean
         default: false
 

@@ -5,20 +5,26 @@ deterministic (reasoning models, SQL-timeout boundaries).
 
     uv run python scripts/ci_compare.py --target inkling [--tolerance 0.02]
 
-Baseline = the metrics.json at git HEAD for the same path (none while results/ is
-gitignored, so every row reports "new"); "fresh" = the working tree after the run.
-Smoke runs (n far below baseline) are reported but not judged.
+Baseline = the tracked baselines/<benchmark>/<target>/metrics.json (results/ is
+gitignored); move it by copying in a full run's metrics.json. "Fresh" = results/
+(incl. results/_smoke/) after the run. Smokes (n far below baseline) are reported
+but not judged.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))  # so `src` is importable when run as a script
+
+from src.results import model_slug
+
 RESULTS = ROOT / "results"
+BASELINES = ROOT / "baselines"
 
 # primary metric per benchmark: (key, higher_is_better)
 _PRIMARY = [
@@ -37,26 +43,25 @@ def primary(metrics: dict):
     return None, None, True
 
 
-def _baseline(path: Path) -> dict | None:
-    rel = path.relative_to(ROOT)
-    try:
-        out = subprocess.run(
-            ["git", "show", f"HEAD:{rel.as_posix()}"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return json.loads(out.stdout)
-    except (subprocess.CalledProcessError, json.JSONDecodeError):
-        return None
-
-
-def compare_target(target: str, tolerance: float) -> tuple[list[list], list[str]]:
+def compare_target(
+    target: str,
+    tolerance: float,
+    results: Path = RESULTS,
+    baselines: Path = BASELINES,
+) -> tuple[list[list], list[str]]:
     rows, warnings = [], []
-    for mpath in sorted(RESULTS.glob(f"*/{target}/metrics.json")):
+    slug = model_slug(target)
+    fresh_paths = [
+        *results.glob(f"*/{slug}/metrics.json"),
+        *results.glob(f"_smoke/*/{slug}/metrics.json"),
+    ]
+    for mpath in sorted(fresh_paths):
         fresh = json.loads(mpath.read_text())
-        base = _baseline(mpath)
+        rel = mpath.relative_to(results)
+        if rel.parts[0] == "_smoke":  # smokes compare against the full-run baseline
+            rel = rel.relative_to("_smoke")
+        base_path = baselines / rel
+        base = json.loads(base_path.read_text()) if base_path.exists() else None
         key, new, higher = primary(fresh)
         bench = fresh.get("benchmark", mpath.parent.parent.name)
         n = fresh.get("n")

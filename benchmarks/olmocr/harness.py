@@ -182,19 +182,17 @@ def score(records: list[dict], samples: list[dict], target=None) -> dict:
         finally:
             sys.stdout, sys.argv = real, argv
 
-    return {
-        "candidate": candidate,
-        "log": str(log_path),
-        **_parse_scores(buf.getvalue()),
-    }
+    scores = parse_scores(buf.getvalue())
+    del scores["candidate"]  # the scorer echoes the --candidate we passed
+    return {"candidate": candidate, "log": str(log_path), **scores}
 
 
-def _parse_scores(text: str) -> dict:
+def parse_scores(text: str) -> dict:
+    """The scorer's stdout table -> {candidate, overall, ci, splits}; None fields if absent."""
     text = text.replace("\r", "\n")
     head = re.search(
         r"^(\S+)\s*:\s*Average Score:\s*([\d.]+)%\s*±\s*([\d.]+)%", text, re.MULTILINE
     )
-    overall = float(head.group(2)) if head else None
     splits = {
         m.group(1): float(m.group(2))
         for m in re.finditer(r"^\s+(\w+)\.jsonl\s*:\s*([\d.]+)%", text, re.MULTILINE)
@@ -202,4 +200,9 @@ def _parse_scores(text: str) -> dict:
     base = re.search(r"^\s+baseline\s*:\s*([\d.]+)%", text, re.MULTILINE)
     if base:
         splits["baseline"] = float(base.group(1))
-    return {"overall": overall, "splits": splits}
+    return {
+        "candidate": head.group(1) if head else None,
+        "overall": float(head.group(2)) if head else None,
+        "ci": float(head.group(3)) if head else None,
+        "splits": splits,
+    }

@@ -248,35 +248,32 @@ def load_metrics() -> dict:
 
 
 def load_olmocr() -> dict:
-    """Parse olmOCR-bench's stdout table from captured logs, runs or pasted summaries."""
+    """olmOCR scores by model: captured logs/pasted summaries, overridden by run metrics.json."""
+    from benchmarks.olmocr.harness import parse_scores
+    from src.results import discover
+
     out: dict[str, dict] = {}
     candidates = []
     for pat in ("**/olmocr*.log", "**/*olmocr*.txt", "**/suite*.log"):
         candidates += sorted(LOGS.glob(pat))
     for log in dict.fromkeys(candidates):
-        text = log.read_text(errors="ignore").replace("\r", "\n")
-        head = re.search(
-            r"^(\S+)\s*:\s*Average Score:\s*([\d.]+)%\s*±\s*([\d.]+)%",
-            text,
-            re.MULTILINE,
-        )
-        if not head:
+        scores = parse_scores(log.read_text(errors="ignore"))
+        if scores["overall"] is None:
             continue
-        model, overall, ci = head.group(1), float(head.group(2)), float(head.group(3))
-        splits = {
-            m.group(1): float(m.group(2))
-            for m in re.finditer(
-                r"^\s+(\w+)\.jsonl\s*:\s*([\d.]+)%", text, re.MULTILINE
-            )
-        }
-        base = re.search(r"^\s+baseline\s*:\s*([\d.]+)%", text, re.MULTILINE)
-        if base:
-            splits["baseline"] = float(base.group(1))
-        out[canon(model)] = {
-            "overall": overall,
-            "ci": ci,
-            "splits": splits,
+        out[canon(scores.pop("candidate"))] = {
+            **scores,
             "source": str(log.relative_to(ROOT)),
+        }
+    for d in discover(RESULTS):
+        if d.get("benchmark") != "olmocr" or d.get("overall") is None:
+            continue
+        if d.get("ci") is None and d["target"] in out:
+            continue  # pre-CI metrics.json; its run's log has the same table plus the CI
+        out[d["target"]] = {
+            "overall": d["overall"],
+            "ci": d.get("ci"),
+            "splits": d.get("splits") or {},
+            "source": str(Path(d["_path"]).relative_to(ROOT)),
         }
     return out
 
@@ -347,7 +344,8 @@ def report(models: list[str], data: dict, olm: dict, tsv=False):
         if not d:
             continue
         row = [m, d["overall"]] + [d["splits"].get(k) for _, k in OLMOCR_COLS[1:-1]]
-        row.append(f"{d['overall']:.1f}±{d['ci']:.1f}")
+        ci = f"±{d['ci']:.1f}" if d["ci"] is not None else ""
+        row.append(f"{d['overall']:.1f}{ci}")
         rows.append(row)
     if rows:
         print("\n=== olmOCR-bench ===")
