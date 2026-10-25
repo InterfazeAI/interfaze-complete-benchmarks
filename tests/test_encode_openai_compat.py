@@ -120,3 +120,17 @@ def test_image_message_becomes_block_list():
 def test_none_temperature_is_omitted():
     kw = ADAPTER.encode(_text_req("off", temperature=None), OPENAI_CAPS, "gpt-5.5")
     assert "temperature" not in kw
+
+
+def test_admin_key_goes_to_interfaze_only(monkeypatch):
+    monkeypatch.setenv("INTERFAZE_ADMIN_KEY", "secret")
+    lite = OpenAICompatAdapter("interfaze", "https://lite.example/v1", ["INTERFAZE_API_KEY"], {})
+    other = OpenAICompatAdapter("openrouter", "https://openrouter.ai/api/v1", ["OPENROUTER_API_KEY"], {})
+    assert lite._extra_headers() == {"x-api-admin-key": "secret"}
+    assert other._extra_headers() is None
+
+
+def test_no_admin_key_sends_no_header(monkeypatch):
+    monkeypatch.delenv("INTERFAZE_ADMIN_KEY", raising=False)
+    lite = OpenAICompatAdapter("interfaze", "https://lite.example/v1", ["INTERFAZE_API_KEY"], {})
+    assert lite._extra_headers() is None

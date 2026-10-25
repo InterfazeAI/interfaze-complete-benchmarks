@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from src.capabilities import Capabilities
@@ -26,7 +27,14 @@ class OpenAICompatAdapter(ProviderAdapter):
             base_url=self.base_url,
             timeout=180.0,
             max_retries=2,
+            default_headers=self._extra_headers(),
         )
+
+    def _extra_headers(self) -> dict[str, str] | None:
+        # A lite deployment on Modal checks x-api-admin-key, not the Bearer token. Sent only
+        # to interfaze: this adapter also serves third-party APIs, which must never see it.
+        admin = os.getenv("INTERFAZE_ADMIN_KEY") if self.name == "interfaze" else None
+        return {"x-api-admin-key": admin} if admin else None
 
     def _content(self, msg: Message, caps: Capabilities) -> Any:
         if all(isinstance(p, TextPart) for p in msg.parts):

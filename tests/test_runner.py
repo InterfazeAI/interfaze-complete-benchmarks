@@ -4,6 +4,8 @@ scripted fake adapter through the real `execute`, so no network and no sleeps
 (backoff_base=0).
 """
 
+import pytest
+
 from src.capabilities import Capabilities
 from src.request import Message, ReasoningSpec, Request, TextPart
 from src.response import Response
@@ -247,3 +249,61 @@ async def test_single_route_records_host(tmp_path):
         backoff_base=0.0,
     )
     assert store.load_responses()[0]["host"] == "interfaze"
+
+
+class _SpyBar:
+    """Records tqdm update/close so tests can assert progress-bar lifecycle."""
+
+    def __init__(self, *a, **k):
+        self.n = 0
+        self.total = k.get("total")
+        self.closed = False
+
+    def update(self, k=1):
+        self.n += k
+
+    def close(self):
+        self.closed = True
+
+
+def _spy_bars(monkeypatch):
+    made = []
+
+    def factory(*a, **k):
+        made.append(_SpyBar(*a, **k))
+        return made[-1]
+
+    from src import runner
+
+    monkeypatch.setattr(runner, "tqdm", factory)
+    return made
+
+
+async def test_progress_bar_advances_and_closes(tmp_path, monkeypatch):
+    bars = _spy_bars(monkeypatch)
+    adapter = MapAdapter({"a": ["x"], "b": ["y"]})
+    store = RunStore("t", "m", root=tmp_path)
+    await _run(adapter, [{"id": "a"}, {"id": "b"}], store, progress=True)
+    assert bars[0].n == bars[0].total == 2
+    assert bars[0].closed
+
+
+async def test_progress_bar_closes_when_worker_raises(tmp_path, monkeypatch):
+    bars = _spy_bars(monkeypatch)
+
+    def boom(resp, sample):
+        raise ValueError("boom")
+
+    adapter = MapAdapter({"a": ["x"]})
+    store = RunStore("t", "m", root=tmp_path)
+    with pytest.raises(ValueError):
+        await run_benchmark(
+            routes=[_route(adapter, caps=CAPS)],
+            samples=[{"id": "a"}],
+            build_request=_build_request,
+            parse=boom,
+            store=store,
+            backoff_base=0.0,
+            progress=True,
+        )
+    assert bars[0].closed  # finally: closes the bar even on a caller-side crash

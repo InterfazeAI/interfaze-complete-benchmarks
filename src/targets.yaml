@@ -15,8 +15,6 @@ targets:
     model_id: thinkingmachines/inkling-small
     capabilities:
       reasoning: { extra: { toggle: effort }, off_value: none, on_value: high, true_off: true }
-    # if OpenRouter can't serve, fall back to the same weights on Fireworks
-    # (host is recorded per row; proprietary targets declare no fallbacks -> stop)
     fallbacks:
       - provider: fireworks
         model_id: accounts/fireworks/models/inkling-small
@@ -77,3 +75,9 @@ targets:
   interfaze-beta:
     provider: interfaze
     model_id: interfaze-beta
+
+  # A lite deployment on Modal, called directly: OPENAI_BASE_URL=<deployment>/v1 and
+  # INTERFAZE_ADMIN_KEY set.
+  interfaze-lite:
+    provider: interfaze
+    model_id: interfaze-lite

@@ -28,6 +28,7 @@ SAMPLE_DATA_DIR = Path(__file__).resolve().parent / "bench" / "sample_data"
 FULL_DATA_DIR = Path(__file__).resolve().parent / "bench" / "full_data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 USAGE_OUTPUT = RESULTS_DIR / "olmocr_reducto_usage.json"
+LEDGER_OUTPUT = RESULTS_DIR / "olmocr_reducto_ledger.jsonl"
 CANDIDATE_NAME = "reducto"
 RATE_LIMIT = 8
 MAX_RETRIES = 3
@@ -114,6 +115,8 @@ def download_full_dataset():
 async def process_page(pdf_path, page_num, output_path, rate_limiter):
     from olmocr.bench.runners.run_reducto import run_reducto
 
+    from src.providers.reducto import BudgetExceeded
+
     for attempt in range(MAX_RETRIES):
         await rate_limiter.acquire()
         try:
@@ -122,6 +125,8 @@ async def process_page(pdf_path, page_num, output_path, rate_limiter):
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(result)
             return True
+        except BudgetExceeded:
+            raise  # not transient — abort the run rather than burn retries
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(2**attempt)
@@ -133,6 +138,14 @@ async def process_page(pdf_path, page_num, output_path, rate_limiter):
 
 
 async def generate_outputs(data_dir: Path):
+    from src.providers.reducto import configure_usage
+
+    configure_usage(
+        snapshot=USAGE_OUTPUT,
+        ledger=LEDGER_OUTPUT,
+        cap_usd=float(os.getenv("REDUCTO_BUDGET_USD", "20.0")),
+    )
+
     pdf_folder = data_dir / "pdfs"
     output_folder = data_dir / CANDIDATE_NAME
 
@@ -169,20 +182,34 @@ async def generate_outputs(data_dir: Path):
         print("All outputs already exist, skipping generation.")
         return True
     print(f"Processing {len(tasks)} pages...")
-    results = await tqdm_asyncio.gather(
-        *tasks, desc=f"Generating {CANDIDATE_NAME} outputs"
+    from src.providers.reducto import (
+        BudgetExceeded,
+        get_usage_snapshot,
+        write_usage_snapshot,
     )
+
+    try:
+        results = await tqdm_asyncio.gather(
+            *tasks, desc=f"Generating {CANDIDATE_NAME} outputs"
+        )
+    except BudgetExceeded as e:
+        write_usage_snapshot(USAGE_OUTPUT)
+        snap = get_usage_snapshot()
+        print(f"\n*** BUDGET STOP: {e}")
+        print(f"    Spent so far: ${snap['usd']:.4f} over {snap['pages']} pages")
+        print(f"    Partial usage written to {USAGE_OUTPUT}; rerun to resume.")
+        return False
+
     num_success = sum(1 for r in results if r)
     num_failed = len(results) - num_success
     print(f"Done: {num_success} succeeded, {num_failed} failed")
 
-    try:
-        from src.providers.reducto import write_usage_snapshot
-
-        write_usage_snapshot(USAGE_OUTPUT)
-        print(f"Usage written to {USAGE_OUTPUT}")
-    except Exception as e:
-        print(f"  (usage snapshot failed: {e})")
+    write_usage_snapshot(USAGE_OUTPUT)
+    snap = get_usage_snapshot()
+    print(
+        f"Usage: ${snap['usd']:.4f} over {snap['pages']} pages "
+        f"({snap['credits']:.1f} credits) -> {USAGE_OUTPUT}"
+    )
 
     return num_failed == 0
 

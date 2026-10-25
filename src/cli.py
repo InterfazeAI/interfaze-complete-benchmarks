@@ -80,6 +80,7 @@ def cmd_run(args) -> None:
             id_key=bench.ID_KEY,
             rate_limit=d.get("rate_limit", 25),
             max_in_flight=d.get("max_in_flight", 8),
+            desc=f"{result_name} / {target.name}",
         )
     )
 

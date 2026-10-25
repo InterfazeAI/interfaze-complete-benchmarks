@@ -208,7 +208,7 @@ def build_adapter(target: Target):
     spec = PROVIDERS[target.provider]
     base_url = spec.base_url
     if target.provider == "interfaze":
-        base_url = os.getenv("OPENAI_BASE_URL", "https://api.interfaze.ai/v1")
+        base_url = os.getenv("OPENAI_BASE_URL", "https://interfaze-7rhmgf9m8-jigsaw-stack.vercel.app/v1")
     return spec.adapter_cls(
         name=target.provider,
         base_url=base_url,

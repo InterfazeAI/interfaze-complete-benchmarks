@@ -4,7 +4,10 @@ resume, checkpoint."""
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass, field
+
+from tqdm import tqdm
 
 from src.capabilities import Capabilities
 from src.errors import ErrorKind
@@ -74,6 +77,8 @@ async def run_benchmark(
     max_in_flight: int = 8,
     max_retries: int = 3,
     backoff_base: float = 1.0,
+    progress: bool | None = None,
+    desc: str = "benchmark",
 ) -> RunResult:
     if done is None:
 
@@ -82,6 +87,19 @@ async def run_benchmark(
 
     completed = store.completed_ids(id_key, done)
     pending = [s for s in samples if s[id_key] not in completed]
+
+    # Live bar on an interactive terminal; quiet in CI (non-tty). initial= lets a
+    # resumed run read e.g. 150/200 instead of restarting the count from zero.
+    if progress is None:
+        progress = sys.stderr.isatty()
+    pbar = tqdm(
+        total=len(samples),
+        initial=len(samples) - len(pending),
+        desc=desc,
+        disable=not progress,
+        file=sys.stderr,
+        unit="req",
+    )
 
     limiter = _RateLimiter(rate_limit)
     result = RunResult()
@@ -122,11 +140,12 @@ async def run_benchmark(
                     lock,
                     id_key,
                     route.provider,
+                    pbar,
                 )
                 return
             if outcome not in _FAILOVER:
                 break  # a genuine non-answer from this host; a backup won't help
-        await _record_failure(sample, last_err, store, result, lock, id_key)
+        await _record_failure(sample, last_err, store, result, lock, id_key, pbar)
 
     # Bounded worker pool: build_request runs only when a worker pulls a sample,
     # so at most max_in_flight requests (and their decoded images) exist at once.
@@ -144,12 +163,17 @@ async def run_benchmark(
                 return
             await process(sample)
 
-    await asyncio.gather(*(worker() for _ in range(min(max_in_flight, len(pending)))))
+    try:
+        await asyncio.gather(
+            *(worker() for _ in range(min(max_in_flight, len(pending))))
+        )
+    finally:
+        pbar.close()
     return result
 
 
 async def _record_success(
-    sample, resp, hints, parse, store, result, lock, id_key, host
+    sample, resp, hints, parse, store, result, lock, id_key, host, pbar
 ):
     prediction = parse(resp, sample)
     record = {
@@ -167,9 +191,10 @@ async def _record_success(
         for h in hints:
             if h not in result.hints:
                 result.hints.append(h)
+        pbar.update(1)
 
 
-async def _record_failure(sample, be, store, result, lock, id_key):
+async def _record_failure(sample, be, store, result, lock, id_key, pbar):
     record = {
         id_key: sample[id_key],
         "response": None,
@@ -180,3 +205,4 @@ async def _record_failure(sample, be, store, result, lock, id_key):
     async with lock:
         store.append_response(record)
         result.n_failed += 1
+        pbar.update(1)
