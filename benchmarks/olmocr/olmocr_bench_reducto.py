@@ -5,7 +5,6 @@ Mirrors harness.py (chat targets) but uses Reducto's document-parse API.
 
 Usage:
     uv run -m benchmarks.olmocr.olmocr_bench_reducto
-    uv run -m benchmarks.olmocr.olmocr_bench_reducto --sample
     uv run -m benchmarks.olmocr.olmocr_bench_reducto --skip-generation
     uv run -m benchmarks.olmocr.olmocr_bench_reducto --generate-only
 """
@@ -24,7 +23,6 @@ from tqdm.asyncio import tqdm_asyncio
 load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-SAMPLE_DATA_DIR = Path(__file__).resolve().parent / "bench" / "sample_data"
 FULL_DATA_DIR = Path(__file__).resolve().parent / "bench" / "full_data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 USAGE_OUTPUT = RESULTS_DIR / "olmocr_reducto_usage.json"
@@ -232,17 +230,12 @@ async def main():
     parser = argparse.ArgumentParser(
         description=f"Run OlmOCR benchmark with {CANDIDATE_NAME}"
     )
-    parser.add_argument("--sample", action="store_true")
     parser.add_argument("--skip-generation", action="store_true")
     parser.add_argument("--generate-only", action="store_true")
     args = parser.parse_args()
 
-    if args.sample:
-        data_dir = SAMPLE_DATA_DIR
-        print("=== Using sample data ===")
-    else:
-        print("=== Downloading full olmOCR-bench dataset from HuggingFace ===")
-        data_dir = download_full_dataset()
+    print("=== Downloading full olmOCR-bench dataset from HuggingFace ===")
+    data_dir = download_full_dataset()
 
     if not args.skip_generation:
         print(f"\n=== Generating {CANDIDATE_NAME} outputs ===")

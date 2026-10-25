@@ -11,6 +11,7 @@ from src.capabilities import Capabilities, deep_merge
 from src.providers.anthropic import AnthropicAdapter
 from src.providers.gemini import GeminiAdapter
 from src.providers.openai_compat import OpenAICompatAdapter
+from src.runner import Route
 
 
 @dataclass
@@ -215,9 +216,7 @@ def build_adapter(target: Target):
 
 def build_routes(
     target: Target, benchmark: str | None = None, cli_overrides: dict | None = None
-):
-    from src.runner import Route
-
+) -> list[Route]:
     specs = [target] + [
         Target(
             name=target.name,

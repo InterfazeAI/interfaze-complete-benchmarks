@@ -42,4 +42,3 @@ class Request:
     reasoning: ReasoningSpec = field(default_factory=ReasoningSpec)
     temperature: float | None = 0.0
     max_tokens: int | None = None
-    schema: dict | None = None  # optional structured-output JSON schema

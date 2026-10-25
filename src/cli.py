@@ -4,6 +4,9 @@ import argparse
 import asyncio
 import importlib
 import inspect
+from collections import Counter
+
+from dotenv import load_dotenv
 
 from src.config import (
     build_routes,
@@ -31,44 +34,52 @@ def _import_benchmark(name: str):
     return importlib.import_module(BENCHMARKS[name])
 
 
+def _live_routes(target, benchmark: str) -> list:
+    """Primary route + ordered fallbacks, keeping only those whose API key is present."""
+    live = []
+    for rt in build_routes(target, benchmark=benchmark):
+        if not rt.adapter.resolve_key():
+            print(
+                f"skipping route {rt.provider} (no API key; looked for {rt.adapter.key_spec})"
+            )
+            continue
+        rt.client = rt.adapter.build_client()
+        live.append(rt)
+    if not live:
+        raise SystemExit(f"no API key for any route of target {target.name!r}")
+    return live
+
+
+def _resolve_variant(bench, benchmark: str, variant: str | None) -> str | None:
+    variants = getattr(bench, "VARIANTS", None)
+    if not variants:
+        if variant:
+            raise SystemExit(f"{benchmark} has no variants")
+        return None
+    variant = variant or variants[0]
+    if variant not in variants:
+        raise SystemExit(f"--variant must be one of {variants} for {benchmark}")
+    return variant
+
+
 def cmd_run(args) -> None:
     target = load_target(args.target)
     bench = _import_benchmark(args.benchmark)
     mode = args.reasoning or bench.DEFAULTS.get("reasoning", "off")
-    # primary provider + ordered fallbacks; keep only routes whose key is present
-    routes = build_routes(target, benchmark=args.benchmark)
-    live = []
-    for rt in routes:
-        if rt.adapter.resolve_key():
-            rt.client = rt.adapter.build_client()
-            live.append(rt)
-        else:
-            print(
-                f"skipping route {rt.provider} (no API key; looked for {rt.adapter.key_spec})"
-            )
-    if not live:
-        raise SystemExit(f"no API key for any route of target {target.name!r}")
+    live = _live_routes(target, args.benchmark)
 
-    variants = getattr(bench, "VARIANTS", None)
-    if variants:
-        variant = args.variant or variants[0]
-        if variant not in variants:
-            raise SystemExit(
-                f"--variant must be one of {variants} for {args.benchmark}"
-            )
+    variant = _resolve_variant(bench, args.benchmark, args.variant)
+    result_name = f"{bench.NAME}_{variant}" if variant else bench.NAME
+    print(f"Loading {result_name} samples...")
+    if variant:
         samples = bench.load_samples(args.sample, variant=variant)
-        result_name = f"{bench.NAME}_{variant}"
-    elif args.variant:
-        raise SystemExit(f"{args.benchmark} has no variants")
     else:
         samples = bench.load_samples(args.sample)
-        result_name = bench.NAME
 
-    print(f"Loading {result_name} samples...")
-
-    root = "results" if args.sample is None else "results/_smoke" # sampled runs are smokes, so isolated
+    smoke = args.sample is not None
+    root = "results/_smoke" if smoke else "results"  # isolated so smokes can't clobber
     store = RunStore(result_name, target.name, root=root)
-    d = bench.DEFAULTS
+    defaults = bench.DEFAULTS
 
     result = asyncio.run(
         run_benchmark(
@@ -78,18 +89,14 @@ def cmd_run(args) -> None:
             parse=bench.parse,
             store=store,
             id_key=bench.ID_KEY,
-            rate_limit=d.get("rate_limit", 25),
-            max_in_flight=d.get("max_in_flight", 8),
+            rate_limit=defaults.get("rate_limit", 25),
+            max_in_flight=defaults.get("max_in_flight", 8),
             desc=f"{result_name} / {target.name}",
         )
     )
 
     responses = store.load_responses()
-    hosts: dict = {}
-    for r in responses:
-        h = r.get("host")
-        if h:
-            hosts[h] = hosts.get(h, 0) + 1
+    hosts = dict(Counter(r["host"] for r in responses if r.get("host")))
 
     score_kwargs = {}
     if "target" in inspect.signature(bench.score).parameters:
@@ -126,10 +133,14 @@ def cmd_run(args) -> None:
     )
 
     primary = getattr(bench, "PRIMARY_METRIC", None)
-    pv = metrics.get(primary) if primary else None
-    head = f"{primary}={pv:.4f}  " if isinstance(pv, (int, float)) else ""
+    primary_value = metrics.get(primary) if primary else None
+    headline = (
+        f"{primary}={primary_value:.4f}  "
+        if isinstance(primary_value, (int, float))
+        else ""
+    )
     print(
-        f"\n{bench.NAME} / {target.name}: {head}"
+        f"\n{bench.NAME} / {target.name}: {headline}"
         f"n={metrics.get('n')}  failed={result.n_failed}"
     )
     print(f"written to {store.metrics_path}")
@@ -145,12 +156,7 @@ def cmd_list_targets(args) -> None:
 
 
 def main(argv=None) -> None:
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-    except ImportError:
-        pass
+    load_dotenv()
 
     p = argparse.ArgumentParser(prog="bench")
     sub = p.add_subparsers(dest="cmd", required=True)

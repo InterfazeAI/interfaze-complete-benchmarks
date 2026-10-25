@@ -76,7 +76,7 @@ def classify(exc: Exception) -> Classification:
     if status in (401, 403, 404):
         return Classification(ErrorKind.FATAL, message=msg)
 
-    if status == 400 or status is None:
+    if status in (400, None):
         for pattern, action, param in _PARAM_PATTERNS:
             m = pattern.search(msg)
             if m:
@@ -84,7 +84,5 @@ def classify(exc: Exception) -> Classification:
                 return Classification(
                     ErrorKind.PARAM_REJECTED, action=action, param=captured, message=msg
                 )
-        if status == 400:
-            return Classification(ErrorKind.FATAL, message=msg)
 
     return Classification(ErrorKind.FATAL, message=msg)

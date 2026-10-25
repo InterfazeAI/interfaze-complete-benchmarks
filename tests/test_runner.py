@@ -11,18 +11,13 @@ from src.request import Message, ReasoningSpec, Request, TextPart
 from src.response import Response
 from src.results import RunStore
 from src.runner import Route, run_benchmark
+from tests.fakes import FakeAPIError
 
 
 def _route(adapter, provider="test", caps=None):
     return Route(
         provider=provider, model_id="m", adapter=adapter, caps=caps, client=None
     )
-
-
-class FakeAPIError(Exception):
-    def __init__(self, status_code, message):
-        super().__init__(message)
-        self.status_code = status_code
 
 
 class MapAdapter:

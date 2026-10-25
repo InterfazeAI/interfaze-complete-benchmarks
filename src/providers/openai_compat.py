@@ -13,12 +13,6 @@ from src.request import AudioPart, ImagePart, Message, Request, TextPart
 
 
 class OpenAICompatAdapter(ProviderAdapter):
-    def __init__(self, name, base_url, key_spec, capability_defaults):
-        self.name = name
-        self.base_url = base_url
-        self.key_spec = key_spec
-        self.capability_defaults = capability_defaults
-
     def build_client(self, api_key: str | None = None):
         from openai import OpenAI
 

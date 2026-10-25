@@ -11,10 +11,17 @@ from src.response import Response
 
 
 class ProviderAdapter:
-    name: str
-    base_url: str | None
-    key_spec: list[str]  # env-var precedence, incl. lowercase fallbacks
-    capability_defaults: dict
+    def __init__(
+        self,
+        name: str,
+        base_url: str | None,
+        key_spec: list[str],  # env-var precedence, incl. lowercase fallbacks
+        capability_defaults: dict,
+    ):
+        self.name = name
+        self.base_url = base_url
+        self.key_spec = key_spec
+        self.capability_defaults = capability_defaults
 
     def resolve_key(self) -> str | None:
         for env in self.key_spec:

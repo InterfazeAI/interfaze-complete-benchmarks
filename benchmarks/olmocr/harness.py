@@ -8,11 +8,12 @@ report_scores reads), and parses the overall out of it.
 
 from __future__ import annotations
 
+import base64
+import io
 import json
-import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from src.request import ImagePart, Message, ReasoningSpec, Request, TextPart
 from src.results import model_slug
@@ -83,7 +84,7 @@ def _download() -> Path:
         src = hf_hub_download(
             _HF_REPO, f"bench_data/pdfs/{pdf_rel}", repo_type="dataset"
         )
-        os.symlink(src, str(local))
+        local.symlink_to(src)
     return data_dir
 
 
@@ -100,13 +101,8 @@ def load_samples(sample_size: int | None = None) -> list[dict]:
         pdf_path = data_dir / "pdfs" / pdf_rel
         if not pdf_path.exists():
             continue
-        base = os.path.splitext(os.path.basename(pdf_rel))[0]
-        parent = os.path.dirname(pdf_rel)
-        out_rel = (
-            f"{parent}/{base}_pg{page}_repeat1.md"
-            if parent
-            else f"{base}_pg{page}_repeat1.md"
-        )
+        rel = PurePosixPath(pdf_rel)
+        out_rel = str(rel.with_name(f"{rel.stem}_pg{page}_repeat1.md"))
         samples.append(
             {
                 "id": f"{pdf_rel}#{page}",
@@ -124,8 +120,6 @@ def build_request(sample: dict, mode: str) -> Request:
     b64 = render_pdf_to_base64png(
         sample["pdf_path"], page_num=sample["page"], target_longest_image_dim=2048
     )
-    import base64
-
     png = base64.b64decode(b64)
     return Request(
         [Message("user", [TextPart(PROMPT), ImagePart(png, "image/png")])],
@@ -171,8 +165,6 @@ def score(records: list[dict], samples: list[dict], target=None) -> dict:
 
     _LOGS_DIR.mkdir(parents=True, exist_ok=True)
     log_path = _LOGS_DIR / f"olmocr_{candidate}.log"
-    import io
-
     buf = io.StringIO()
     argv, real = sys.argv, sys.stdout
     sys.argv = [

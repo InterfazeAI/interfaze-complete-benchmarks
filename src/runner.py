@@ -12,6 +12,7 @@ from tqdm import tqdm
 from src.capabilities import Capabilities
 from src.errors import ErrorKind
 from src.execute import BenchError, execute
+from src.providers.base import ProviderAdapter
 from src.results import RunStore
 
 _RETRYABLE = {ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT, ErrorKind.EMPTY_CONTENT}
@@ -23,7 +24,7 @@ _FAILOVER = {ErrorKind.FATAL, ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT}
 class Route:
     provider: str
     model_id: str
-    adapter: object
+    adapter: ProviderAdapter
     caps: Capabilities
     client: object = None
 
@@ -78,12 +79,7 @@ async def run_benchmark(
     progress: bool | None = None,
     desc: str = "benchmark",
 ) -> RunResult:
-    if done is None:
-
-        def done(r):
-            return r.get("response") is not None
-
-    completed = store.completed_ids(id_key, done)
+    completed = store.completed_ids(id_key, done or _has_response)
     pending = [s for s in samples if s[id_key] not in completed]
 
     if progress is None:
@@ -100,6 +96,18 @@ async def run_benchmark(
     limiter = _RateLimiter(rate_limit)
     result = RunResult()
     lock = asyncio.Lock()
+
+    async def save(record: dict, *, failed: bool, hints: list[str]) -> None:
+        async with lock:
+            store.append_response(record)
+            if failed:
+                result.n_failed += 1
+            else:
+                result.n_completed += 1
+            for h in hints:
+                if h not in result.hints:
+                    result.hints.append(h)
+            pbar.update(1)
 
     async def process(sample):
         req = build_request(sample)
@@ -126,22 +134,17 @@ async def run_benchmark(
                         continue
                     outcome = kind
                     break
-                await _record_success(
-                    sample,
-                    resp,
-                    hints,
-                    parse,
-                    store,
-                    result,
-                    lock,
-                    id_key,
-                    route.provider,
-                    pbar,
+                prediction = parse(resp, sample)
+                record = _success_record(
+                    sample[id_key], id_key, resp, prediction, hints, route.provider
                 )
+                await save(record, failed=False, hints=hints)
                 return
             if outcome not in _FAILOVER:
                 break  # a genuine non-answer from this host; a backup won't help
-        await _record_failure(sample, last_err, store, result, lock, id_key, pbar)
+        assert last_err is not None  # every route attempt failed, so one was recorded
+        record = _failure_record(sample[id_key], id_key, last_err)
+        await save(record, failed=True, hints=[])
 
     # Lazy pool: an eager gather would build every request (decoding every image) and OOM CI.
     queue: asyncio.Queue = asyncio.Queue()
@@ -165,12 +168,13 @@ async def run_benchmark(
     return result
 
 
-async def _record_success(
-    sample, resp, hints, parse, store, result, lock, id_key, host, pbar
-):
-    prediction = parse(resp, sample)
+def _has_response(record: dict) -> bool:
+    return record.get("response") is not None
+
+
+def _success_record(sample_id, id_key: str, resp, prediction, hints, host: str) -> dict:
     record = {
-        id_key: sample[id_key],
+        id_key: sample_id,
         "response": resp.text,
         "prediction": prediction,
         "reasoning_tokens": resp.reasoning_tokens,
@@ -178,24 +182,14 @@ async def _record_success(
     }
     if hints:
         record["capability_hints"] = hints
-    async with lock:
-        store.append_response(record)
-        result.n_completed += 1
-        for h in hints:
-            if h not in result.hints:
-                result.hints.append(h)
-        pbar.update(1)
+    return record
 
 
-async def _record_failure(sample, be, store, result, lock, id_key, pbar):
-    record = {
-        id_key: sample[id_key],
+def _failure_record(sample_id, id_key: str, err: BenchError) -> dict:
+    return {
+        id_key: sample_id,
         "response": None,
         "prediction": None,
-        "error": be.classification.kind.value,
-        "error_message": be.classification.message,
+        "error": err.classification.kind.value,
+        "error_message": err.classification.message,
     }
-    async with lock:
-        store.append_response(record)
-        result.n_failed += 1
-        pbar.update(1)

@@ -7,9 +7,9 @@ default and what the archived leaderboard numbers use) and `full`
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 
+from src.choice import extract_choice
 from src.request import Message, ReasoningSpec, Request, TextPart
 
 NAME = "mmmlu"
@@ -48,21 +48,9 @@ _PROMPT = (
     "Answer:"
 )
 
-_LETTER_RE = re.compile(r"\b([ABCD])\b")
-_FIRST_LETTER_RE = re.compile(r"[ABCD]")
-
 
 def parse_answer(text: str) -> str | None:
-    if not text:
-        return None
-    s = text.strip()
-    if len(s) == 1 and s.upper() in "ABCD":
-        return s.upper()
-    m = _LETTER_RE.search(s.upper())
-    if m:
-        return m.group(1)
-    m = _FIRST_LETTER_RE.search(s.upper())
-    return m.group(0) if m else None
+    return extract_choice(text, "ABCD")
 
 
 def _build_sample(row: dict, lang: str, i: int, variant: str) -> dict:
@@ -120,7 +108,7 @@ def build_request(sample: dict, mode: str) -> Request:
 
 
 def parse(response, sample) -> str | None:
-    return parse_answer(response.text or "")
+    return parse_answer(response.text)
 
 
 def score(records: list[dict], samples: list[dict]) -> dict:

@@ -9,12 +9,7 @@ from src.errors import ErrorKind
 from src.execute import BenchError, execute
 from src.request import Message, ReasoningSpec, Request, TextPart
 from src.response import Response
-
-
-class FakeAPIError(Exception):
-    def __init__(self, status_code, message):
-        super().__init__(message)
-        self.status_code = status_code
+from tests.fakes import FakeAPIError
 
 
 class ScriptedAdapter:
@@ -158,3 +153,4 @@ def test_param_retries_are_bounded():
             adapter, None, _req(), _caps(off_value="minimal"), "m", max_param_retries=3
         )
     assert len(adapter.history) <= 4
+

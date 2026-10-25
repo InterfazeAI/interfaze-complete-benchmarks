@@ -6,6 +6,7 @@ compares result sets to gold — it needs the (gitignored) data/ directory.
 from __future__ import annotations
 
 import csv
+import json
 import math
 import os
 import re
@@ -109,25 +110,22 @@ def load_samples(sample_size: int | None = None) -> list[dict]:
             f"Missing {_ALL_EXAMPLES}. The Spider2 data/ dir (gitignored, ~4GB) must "
             "be present. Run: uv run -m benchmarks.spider2_lite.fetch_data"
         )
-    import json
-
     rows = [
         json.loads(line)
         for line in _ALL_EXAMPLES.read_text().splitlines()
         if line.strip()
     ]
-    local = [r for r in rows if r["instance_id"].startswith("local")]
-    samples = []
-    for ex in local:
-        samples.append(
-            {
-                "instance_id": ex["instance_id"],
-                "db": ex["db"],
-                "question": ex["question"],
-                "external_knowledge": ex.get("external_knowledge"),
-                "prompt": build_prompt(ex),
-            }
-        )
+    samples = [
+        {
+            "instance_id": ex["instance_id"],
+            "db": ex["db"],
+            "question": ex["question"],
+            "external_knowledge": ex.get("external_knowledge"),
+            "prompt": build_prompt(ex),
+        }
+        for ex in rows
+        if ex["instance_id"].startswith("local")
+    ]
     return samples[:sample_size] if sample_size else samples
 
 
@@ -239,8 +237,6 @@ def resolve_gold_paths(instance_id: str):
 
 
 def load_eval_standard() -> dict:
-    import json
-
     out = {}
     with open(_EVAL_STANDARD, encoding="utf-8") as f:
         for line in f:

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import ast
-import re
 from collections import defaultdict
 from typing import Any
 
+from src.choice import extract_choice
 from src.media import encode_image
 from src.request import Message, ReasoningSpec, Request, TextPart
 
@@ -21,7 +21,7 @@ _SPLIT = "test"
 _CONFIGS = {"standard": "standard (10 options)", "vision": "vision"}
 _MAX_IMAGE_SIDE = 1536
 _DATASET: Any = None  # full-run split; images read lazily by idx to bound memory
-_LETTERS = list("ABCDEFGHIJ")
+_LETTERS = "ABCDEFGHIJ"
 
 _PROMPT_STANDARD = (
     "Answer the following multiple-choice question. The question may reference "
@@ -40,21 +40,9 @@ _PROMPT_VISION = (
     "Answer:"
 )
 
-_LETTER_RE = re.compile(r"\b([A-J])\b")
-_FALLBACK_RE = re.compile(r"[A-J]")
-
 
 def parse_answer(text: str) -> str | None:
-    if not text:
-        return None
-    s = text.strip()
-    if len(s) == 1 and s.upper() in _LETTERS:
-        return s.upper()
-    m = _LETTER_RE.search(s.upper())
-    if m:
-        return m.group(1)
-    m = _FALLBACK_RE.search(s.upper())
-    return m.group(0) if m else None
+    return extract_choice(text, _LETTERS)
 
 
 def _options(raw) -> list[str]:
@@ -70,10 +58,8 @@ def _img_cols(variant: str) -> list[str]:
 
 
 def _row_images(row, setting: str) -> list:
-    if setting == "vision":
-        return [row["image"]]
-    imgs = [row.get(f"image_{i}") for i in range(1, 8)]
-    return [im for im in imgs if im is not None]
+    images = (row.get(col) for col in _img_cols(setting))
+    return [im for im in images if im is not None]
 
 
 def _mk_sample(row, variant: str, idx: int | None = None) -> dict:
@@ -138,7 +124,7 @@ def build_request(sample: dict, mode: str) -> Request:
 
 
 def parse(response, sample) -> str | None:
-    return parse_answer(response.text or "")
+    return parse_answer(response.text)
 
 
 def score(records: list[dict], samples: list[dict]) -> dict:

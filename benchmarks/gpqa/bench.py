@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import random
-import re
 from collections import defaultdict
 
+from src.choice import extract_choice
 from src.request import Message, ReasoningSpec, Request, TextPart
 
 NAME = "gpqa"
@@ -25,9 +25,6 @@ _PROMPT = (
     "A. {a}\nB. {b}\nC. {c}\nD. {d}\n\n"
     "Answer:"
 )
-
-_LETTER_RE = re.compile(r"\b([ABCD])\b")
-_FIRST_LETTER_RE = re.compile(r"[ABCD]")
 
 
 def _clean(s) -> str:
@@ -83,17 +80,7 @@ def build_request(sample: dict, mode: str) -> Request:
 
 
 def parse(response, sample) -> str | None:
-    text = (response.text or "").strip()
-    if not text:
-        return None
-    if len(text) == 1 and text.upper() in "ABCD":
-        return text.upper()
-    up = text.upper()
-    m = _LETTER_RE.search(up)
-    if m:
-        return m.group(1)
-    m = _FIRST_LETTER_RE.search(up)
-    return m.group(0) if m else None
+    return extract_choice(response.text, "ABCD")
 
 
 def score(records: list[dict], samples: list[dict]) -> dict:

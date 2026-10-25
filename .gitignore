@@ -206,9 +206,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# olmOCR-Bench dataset + per-candidate prediction outputs (large, downloaded from HF)
-benchmarks/olmocr_bench/olmocr_bench/
-
 # Downloaded benchmark datasets (large; fetched at runtime, not source)
 benchmarks/spider2_lite/data/
 benchmarks/olmocr/bench/full_data/

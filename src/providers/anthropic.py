@@ -12,12 +12,6 @@ _BUDGET_MARGIN = 4096
 
 
 class AnthropicAdapter(ProviderAdapter):
-    def __init__(self, name, base_url, key_spec, capability_defaults):
-        self.name = name
-        self.base_url = base_url
-        self.key_spec = key_spec
-        self.capability_defaults = capability_defaults
-
     def build_client(self, api_key: str | None = None):
         from anthropic import Anthropic
 
@@ -59,13 +53,9 @@ class AnthropicAdapter(ProviderAdapter):
         if inj.anthropic_thinking is not None:
             kwargs["thinking"] = inj.anthropic_thinking
 
-        thinking_on = (inj.anthropic_thinking or {}).get("type") == "enabled"
-        if thinking_on:
-            budget = (
-                inj.anthropic_thinking.get("budget_tokens", 0)
-                if inj.anthropic_thinking
-                else 0
-            )
+        thinking = inj.anthropic_thinking or {}
+        if thinking.get("type") == "enabled":
+            budget = thinking.get("budget_tokens", 0)
             max_tokens = req.max_tokens or extra.get("on_max_tokens", _DEFAULT_ON_MAX)
             if max_tokens <= budget:
                 max_tokens = budget + _BUDGET_MARGIN

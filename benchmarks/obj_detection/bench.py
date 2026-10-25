@@ -93,36 +93,30 @@ def _normalize_to_pixels(box, width, height, order):
     return [box[1] * sx, box[0] * sy, box[3] * sx, box[2] * sy]
 
 
+def _last_match(pattern: re.Pattern, text: str) -> re.Match | None:
+    matches = list(pattern.finditer(text))
+    return matches[-1] if matches else None
+
+
+def _four_floats(m: re.Match) -> list[float]:
+    return [float(m.group(i)) for i in range(1, 5)]
+
+
 def parse_box(text: str, width: int, height: int):
     if not text:
         return None
-    m = None
-    for match in JSON_TLBR_PATTERN.finditer(text):
-        m = match
-    if m is not None:
-        return _normalize_to_pixels(
-            [float(m.group(i)) for i in range(1, 5)], width, height, "xyxy"
-        )
-    m = None
-    for match in JSON_BOX2D_PATTERN.finditer(text):
-        m = match
-    if m is not None:
-        return _normalize_to_pixels(
-            [float(m.group(i)) for i in range(1, 5)], width, height, "yxyx"
-        )
-    for pattern in (BOX_LINE_PATTERN, BOXED_PATTERN):
-        matches = list(pattern.finditer(text))
-        if matches:
-            m = matches[-1]
-            return _normalize_to_pixels(
-                [float(m.group(i)) for i in range(1, 5)], width, height, "xyxy"
-            )
-    matches = list(BARE_4TUPLE.finditer(text[-800:]))
-    if matches:
-        m = matches[-1]
-        return _normalize_to_pixels(
-            [float(m.group(i)) for i in range(1, 5)], width, height, "xyxy"
-        )
+    # (pattern, axis order, text window) in priority order; each takes its last match
+    candidates = (
+        (JSON_TLBR_PATTERN, "xyxy", text),
+        (JSON_BOX2D_PATTERN, "yxyx", text),
+        (BOX_LINE_PATTERN, "xyxy", text),
+        (BOXED_PATTERN, "xyxy", text),
+        (BARE_4TUPLE, "xyxy", text[-800:]),
+    )
+    for pattern, order, window in candidates:
+        m = _last_match(pattern, window)
+        if m is not None:
+            return _normalize_to_pixels(_four_floats(m), width, height, order)
     return None
 
 
@@ -149,7 +143,6 @@ def coco_bbox_to_xyxy(bbox, sx=1.0, sy=1.0):
 
 
 # --- format-tolerant oracle ---
-_TUPLE = BARE_4TUPLE
 _PAREN_PAIRS = re.compile(
     r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)\s*[^()]*?\s*"
     r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)"
@@ -157,14 +150,10 @@ _PAREN_PAIRS = re.compile(
 
 
 def _extract_tuples(text: str):
-    out = []
-    for m in _TUPLE.finditer(text):
-        out.append(tuple(float(g) for g in m.groups()))
-    for m in JSON_TLBR_PATTERN.finditer(text):
-        out.append(tuple(float(g) for g in m.groups()))
-    for m in _PAREN_PAIRS.finditer(text):
-        out.append(tuple(float(g) for g in m.groups()))
-    return out
+    patterns = (BARE_4TUPLE, JSON_TLBR_PATTERN, _PAREN_PAIRS)
+    return [
+        tuple(float(g) for g in m.groups()) for p in patterns for m in p.finditer(text)
+    ]
 
 
 def _all_interpretations(nums, w, h):

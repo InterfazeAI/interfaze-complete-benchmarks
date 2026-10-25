@@ -281,52 +281,38 @@ def load_olmocr() -> dict:
     return out
 
 
-def fmt(v, width=7):
-    return f"{v:>{width}.2f}" if isinstance(v, (int, float)) else f"{'-':>{width}}"
+def _cell(value, missing: str) -> str:
+    if value is None:
+        return missing
+    return f"{value:.2f}" if isinstance(value, float) else str(value)
+
+
+def _aligned(cells, widths) -> str:
+    """Label column left-aligned, value columns right-aligned."""
+    return "  ".join(
+        c.ljust(w) if i == 0 else c.rjust(w)
+        for i, (c, w) in enumerate(zip(cells, widths))
+    )
 
 
 def table(headers, rows, tsv=False):
     if tsv:
         print("\t".join(headers))
         for r in rows:
-            print(
-                "\t".join(
-                    ""
-                    if c is None
-                    else (f"{c:.2f}" if isinstance(c, float) else str(c))
-                    for c in r
-                )
-            )
+            print("\t".join(_cell(c, "") for c in r))
         return
-    widths = (
-        [
-            max(
-                len(str(h)),
-                *(
-                    len(f"{c:.2f}")
-                    if isinstance(c, float)
-                    else len(str(c if c is not None else "-"))
-                    for c in col
-                ),
-            )
-            for h, col in zip(headers, zip(*rows))
+    text_rows = [[_cell(c, "-") for c in r] for r in rows]
+    if text_rows:
+        widths = [
+            max(len(h), *(len(c) for c in col))
+            for h, col in zip(headers, zip(*text_rows))
         ]
-        if rows
-        else [len(h) for h in headers]
-    )
-    print(
-        "  ".join(
-            h.ljust(w) if i == 0 else h.rjust(w)
-            for i, (h, w) in enumerate(zip(headers, widths))
-        )
-    )
+    else:
+        widths = [len(h) for h in headers]
+    print(_aligned(headers, widths))
     print("  ".join("-" * w for w in widths))
-    for r in rows:
-        cells = []
-        for i, (c, w) in enumerate(zip(r, widths)):
-            s = f"{c:.2f}" if isinstance(c, float) else str(c if c is not None else "-")
-            cells.append(s.ljust(w) if i == 0 else s.rjust(w))
-        print("  ".join(cells))
+    for r in text_rows:
+        print(_aligned(r, widths))
 
 
 def report(models: list[str], data: dict, olm: dict, tsv=False):
@@ -383,15 +369,9 @@ def report(models: list[str], data: dict, olm: dict, tsv=False):
 
     # ---- ASR
     rows = [
-        [
-            m,
-            get(m, "asr")["inv"],
-            get(m, "asr")["wer"],
-            get(m, "asr")["cer"],
-            get(m, "asr")["n"],
-        ]
+        [m, d["inv"], d["wer"], d["cer"], d["n"]]
         for m in models
-        if get(m, "asr")
+        if (d := get(m, "asr"))
     ]
     if rows:
         print("\n=== ASR (VoxPopuliCleaned-AA) ===")
@@ -452,13 +432,9 @@ def report(models: list[str], data: dict, olm: dict, tsv=False):
 
     # ---- Spider2
     rows = [
-        [
-            m,
-            get(m, "spider2")["acc"],
-            f"{get(m, 'spider2')['correct']}/{get(m, 'spider2')['n']}",
-        ]
+        [m, d["acc"], f"{d['correct']}/{d['n']}"]
         for m in models
-        if get(m, "spider2")
+        if (d := get(m, "spider2"))
     ]
     if rows:
         print("\n=== Spider-2.0-lite (SQLite subset) ===")
