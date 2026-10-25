@@ -48,7 +48,7 @@ _PROMPT = (
     "Output the coordinates in the format [x_min, y_min, x_max, y_max]."
 )
 
-# --- production single-interpretation parser (from refcoco.py) ---
+# --- strict single-interpretation parser ---
 BOX_LINE_PATTERN = re.compile(
     r"(?im)^\s*(?:box|answer|bounding\s*box)[\s:]*"
     r"\[?\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*"
@@ -148,7 +148,7 @@ def coco_bbox_to_xyxy(bbox, sx=1.0, sy=1.0):
     return [x * sx, y * sy, (x + w) * sx, (y + h) * sy]
 
 
-# --- format-tolerant oracle (from reeval_format_tolerant.py) ---
+# --- format-tolerant oracle ---
 _TUPLE = BARE_4TUPLE
 _PAREN_PAIRS = re.compile(
     r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)\s*[^()]*?\s*"
@@ -254,8 +254,7 @@ def load_samples(sample_size: int | None = None, variant: str = "val") -> list[d
         out = (_mk_sample(r, i, r["image"]) for i, r in enumerate(rows))
         return [s for s in out if s]
 
-    # full run: keep the split memory-mapped and read images lazily by idx
-    # (list(ds) materializes all ~8.8k decoded images and OOMs CI).
+    # full run: memory-mapped split, images read lazily by idx (list(ds) decodes ~8.8k and OOMs CI)
     from datasets import load_dataset
 
     _DATASET = load_dataset(dataset_id, split=split)

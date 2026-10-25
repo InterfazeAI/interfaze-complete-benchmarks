@@ -1,8 +1,5 @@
-"""Media block shapes — the audit's most dangerous fragmentation. Four audio
-shapes and several image shapes look almost interchangeable but are host-
-specific and fail *silently* when wrong (an audio_url data-URI sent to
-OpenRouter is accepted, the audio dropped, and the model hallucinates a
-transcript at WER~1.0). These tests pin each shape exactly.
+"""Media block shapes. They are host-specific and fail *silently* when wrong (an
+audio_url data-URI to OpenRouter drops the audio; WER~1.0), so each is pinned exactly.
 """
 
 import base64
@@ -86,8 +83,7 @@ def test_image_gemini_part_marker():
 
 
 def test_encode_image_converts_rgba_to_jpeg_without_crashing():
-    # PIL raises OSError saving RGBA as JPEG; the convert must happen here so a
-    # transparent PNG sample doesn't crash the run (it did in 8/9 OCR variants).
+    # PIL can't save RGBA as JPEG; transparent PNGs crashed 8/9 OCR variants before this.
     from PIL import Image
 
     from src.media import encode_image

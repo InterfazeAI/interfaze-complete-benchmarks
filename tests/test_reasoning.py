@@ -1,16 +1,4 @@
-"""The reasoning translation — the single place the audit's "6 different ways"
-of encoding a thinking floor collapse into. Every case here is a real quirk
-that currently lives as a scattered special-case:
-
-- OpenAI: reasoning_effort="none", and temperature only when reasoning is off
-- Fireworks: reasoning_effort="none" is a FLOOR (still thinks), temp always sent
-- Gemini 3.7-flash: thinking_level floor "low" (rejects "minimal")
-- Gemini 3.x-flash <3.7: thinking_level floor "minimal"
-- Gemini 2.5-flash: thinking_budget=0 (true off); 2.5-pro: budget=128 (floor)
-- Anthropic: thinking={"type":"disabled"} off / enabled+budget on, temp omitted on
-- OpenRouter default: reasoning.enabled bool; grok/google: reasoning.effort (can't disable)
-- Moonshot: reasoning.enabled=false + provider pin
-"""
+"""The reasoning translation: each case pins one host's real thinking-floor quirk."""
 
 from src.capabilities import ReasoningCap, ReasoningStyle
 from src.reasoning import build_reasoning

@@ -35,8 +35,7 @@ def _clean(s) -> str:
 
 
 def _build_sample(row: dict) -> dict:
-    # Shuffle choices deterministically by Record ID (avoids position bias and
-    # eval-to-eval drift); track which letter holds the correct answer.
+    # Shuffle seeded by Record ID: no position bias, no run-to-run drift.
     record_id = str(row.get("Record ID") or row.get("Question", ""))
     correct = _clean(row["Correct Answer"])
     incorrect = [

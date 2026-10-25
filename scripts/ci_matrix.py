@@ -28,8 +28,7 @@ def _matrix(targets, benches):
 
 
 def changed_targets(old_path: str | None, new_path: str) -> list[str]:
-    """Target names whose *run-affecting* spec was added or modified between two
-    targets.yaml files (the merge diff)."""
+    """Targets whose *run-affecting* spec was added or modified between two targets.yaml files."""
     import yaml
 
     def load(p):
@@ -39,14 +38,11 @@ def changed_targets(old_path: str | None, new_path: str) -> list[str]:
 
     old, new = load(old_path), load(new_path)
     if not old:
-        # No usable baseline (first push / force-push / unavailable). Don't
-        # assume everything changed and benchmark the whole registry — run
-        # nothing; the author can dispatch explicitly.
+        # No baseline (first/force push): run nothing, not the whole registry.
         return []
 
     def runspec(spec):
-        # ci_regression only controls nightly membership, not the run itself,
-        # so flipping it must NOT trigger a (full, paid) benchmark.
+        # ci_regression only sets weekly-schedule membership; flipping it mustn't trigger a paid run.
         return {k: v for k, v in (spec or {}).items() if k != "ci_regression"}
 
     return [

@@ -1,5 +1,5 @@
 # Reasoning becomes a ThinkingConfig (level for 3.x, budget for 2.5); media parts become genai Parts.
-# The client is cached at the factory level to avoid the "client has been closed" GC bug.
+# cli.cmd_run builds one client per Route and holds it, avoiding the "client has been closed" GC bug.
 
 from __future__ import annotations
 

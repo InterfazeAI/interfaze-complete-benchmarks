@@ -5,8 +5,9 @@ deterministic (reasoning models, SQL-timeout boundaries).
 
     uv run python scripts/ci_compare.py --target inkling [--tolerance 0.02]
 
-Baseline = the metrics.json at git HEAD for the same path; "fresh" = the working
-tree after the run. Smoke runs (n far below baseline) are reported but not judged.
+Baseline = the metrics.json at git HEAD for the same path (none while results/ is
+gitignored, so every row reports "new"); "fresh" = the working tree after the run.
+Smoke runs (n far below baseline) are reported but not judged.
 """
 
 from __future__ import annotations

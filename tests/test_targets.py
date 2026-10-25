@@ -1,7 +1,5 @@
-"""Every shipped target must load, resolve to typed capabilities, and build its
-adapter — with no network. This is the guard behind the "add a target = add a
-YAML entry, no code" promise: a new entry is validated here (and in CI on push)
-rather than failing mid-run.
+"""Every shipped target must load, resolve typed capabilities and build its adapter
+offline, so a bad targets.yaml entry fails CI rather than mid-run.
 """
 
 import pytest
@@ -30,8 +28,7 @@ def test_target_resolves_and_builds_adapter(name):
 
 @pytest.mark.parametrize("name", TARGET_NAMES)
 def test_reasoning_keys_are_not_yaml_booleans_by_accident(name):
-    # Guards the off:/on: -> bool trap: bare off:/on: keys parse as booleans and
-    # silently drop the reasoning values.
+    # bare off:/on: keys parse as YAML booleans and silently drop the reasoning values
     reasoning = TARGETS[name].capabilities.get("reasoning", {})
     assert False not in reasoning and True not in reasoning, (
         f"target {name!r} used bare off:/on: keys (parsed as booleans) — "

@@ -66,7 +66,5 @@ def test_full_scoring_parity_when_data_present():
             }
         )
     m = bench.score(records, samples)
-    # NOT exact: Spider2 re-executes SQL with a 120s timeout cap, so a heavy query
-    # near the boundary can flip between runs (warm cache vs cold). A faithful port
-    # reproduces the archived score within a small execution-noise tolerance.
+    # NOT exact: queries near the 120s timeout cap can flip between runs (warm vs cold cache)
     assert abs(m["correct"] - archived["correct"]) <= 2

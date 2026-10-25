@@ -13,17 +13,12 @@ _OFF_MODES = {"off", "none", "disabled"}
 
 @dataclass
 class ReasoningInjection:
-    kwargs: dict = field(
-        default_factory=dict
-    )  # top-level create() kwargs (reasoning_effort)
-    extra_body: dict = field(
-        default_factory=dict
-    )  # OpenRouter reasoning + provider pin
+    kwargs: dict = field(default_factory=dict)  # top-level create() kwargs
+    extra_body: dict = field(default_factory=dict)  # OpenRouter reasoning + pin
     thinking_level: str | None = None  # Gemini 3.x
     thinking_budget: int | None = None  # Gemini 2.5
-    anthropic_thinking: dict | None = (
-        None  # {"type":"disabled"} | {"type":"enabled",...}
-    )
+    # {"type":"disabled"} | {"type":"enabled",...}
+    anthropic_thinking: dict | None = None
     allow_temperature: bool = True
 
 
@@ -89,6 +84,4 @@ def build_reasoning(mode: str, cap: ReasoningCap) -> ReasoningInjection:
             extra_body["provider"] = {"only": list(pin)}
         return ReasoningInjection(extra_body=extra_body, allow_temperature=allow_temp)
 
-    assert_never(
-        style
-    )  # exhaustive over ReasoningStyle; ty errors if a member is added
+    assert_never(style)  # ty errors here if a ReasoningStyle member is unhandled

@@ -1,7 +1,6 @@
 from src.providers.reducto import parse_r1, upload_file
 
-# olmOCR pages are graded on their markdown; the headers_footers split rewards
-# dropping running headers/footers, which r-1 does via retrieval.filter_blocks.
+# the headers_footers split rewards dropping running headers/footers
 FILTER_BLOCKS = ["Header", "Footer", "Page Number"]
 
 

@@ -126,8 +126,6 @@ PROVIDERS: dict[str, ProviderSpec] = {
 }
 
 
-# targets
-
 @dataclass
 class Target:
     name: str
@@ -136,9 +134,8 @@ class Target:
     capabilities: dict = field(default_factory=dict)
     overrides: dict = field(default_factory=dict)
     harness_specific: dict = field(default_factory=dict)
-    fallbacks: list = field(
-        default_factory=list
-    )  # ordered alternate {provider, model_id, capabilities?}
+    # ordered alternate {provider, model_id, capabilities?}
+    fallbacks: list = field(default_factory=list)
     raw: dict = field(default_factory=dict)
 
 
@@ -146,8 +143,7 @@ DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
 
 
 def load_all_targets(path: str | Path = DEFAULT_TARGETS_FILE) -> dict[str, Target]:
-    """Parse the single targets file into {name: Target}. The map KEY is the
-    target name — one file, one entry per model, no code to add a model."""
+    """Parse the targets file into {name: Target}, keyed by each entry's map key."""
     data = yaml.safe_load(Path(path).read_text()) or {}
     raw_targets = data.get("targets") or {}
     out: dict[str, Target] = {}

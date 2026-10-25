@@ -1,7 +1,5 @@
-"""The fallback ladder. On a PARAM_REJECTED 4xx it mutates the request/caps and
-retries in-place (self-heal), recording a capability_hint to promote to YAML.
-Transient/rate-limit/empty/fatal are surfaced as BenchError for the runner to
-retry-or-fail. A scripted fake adapter drives the error sequence — no network.
+"""The fallback ladder: PARAM_REJECTED self-heals in place and records a capability
+hint; other errors surface as BenchError. Driven by a scripted fake adapter.
 """
 
 import pytest

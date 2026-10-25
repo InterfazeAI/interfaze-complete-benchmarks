@@ -1,8 +1,9 @@
 """OCRBench v2: 10k OCR/vision tasks across 30 types; macro-of-category-means.
 
 The per-sample scorer (eval_scripts/eval.py) is reused verbatim — it is file-
-based, needs CWD=benchmarks/ocrbench_v2 and eval_scripts on sys.path, and shells
-out for text-spotting. Only the category aggregation is ported here.
+based, needs eval_scripts on sys.path and CWD=benchmarks/ocrbench_v2 (text
+spotting writes scratch zips to relative paths). Only the category aggregation
+is ported here.
 """
 
 from __future__ import annotations
@@ -115,8 +116,7 @@ def load_samples(sample_size: int | None = None) -> list[dict]:
         ds = load_dataset(_DATASET_ID, split=_SPLIT, streaming=True)
         return [_mk_sample(dict(r), image=r["image"]) for r in ds.take(sample_size)]
 
-    # full run: keep the split memory-mapped and read images lazily by index
-    # (materializing 10k decoded images would OOM)
+    # full run: memory-mapped split, images read lazily by index (10k decoded images would OOM)
     ds = load_dataset(_DATASET_ID, split=_SPLIT)
     _DATASET = ds
     meta = ds.select_columns(["id", "dataset_name", "type", "question", "answers"])
@@ -130,9 +130,7 @@ def build_request(sample: dict, mode: str) -> Request:
         image = _DATASET[sample["idx"]]["image"]  # full run: decoded lazily
     else:
         raise KeyError("OCRBench sample missing both 'image' and 'idx'")
-    img = encode_image(
-        image, "image/jpeg"
-    )  # RGB + JPEG q95, no resize (matches runner)
+    img = encode_image(image, "image/jpeg")  # no resize
     return Request(
         [Message("user", [TextPart(sample["question"]), img])],
         reasoning=ReasoningSpec(mode),
@@ -145,9 +143,7 @@ def parse(response, sample) -> str:
 
 
 def _run_per_sample_scorer(preds: list[dict]) -> list[dict]:
-    """Reuse eval_scripts/eval.py verbatim: it takes file paths, needs
-    CWD=benchmarks/ocrbench_v2 and eval_scripts on sys.path (text-spotting shells
-    out to relative dirs there)."""
+    """Run the vendored eval_scripts/eval.py under the CWD and sys.path it expects."""
     eval_dir = _BENCH_DIR / "eval_scripts"
     if str(eval_dir) not in sys.path:
         sys.path.insert(0, str(eval_dir))
@@ -167,8 +163,7 @@ def _run_per_sample_scorer(preds: list[dict]) -> list[dict]:
 
 
 def aggregate(scored: list[dict]) -> dict:
-    """Macro-of-category-means: each category = mean of its per-sample scores,
-    overall = mean of the non-empty category means."""
+    """Macro-of-category-means: overall = mean of the non-empty category means."""
     en: dict[str, list[float]] = defaultdict(list)
     cn: dict[str, list[float]] = defaultdict(list)
     for item in scored:

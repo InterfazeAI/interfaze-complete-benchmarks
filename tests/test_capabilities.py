@@ -1,10 +1,4 @@
-"""Capability merge + typed parsing.
-
-The capability layer is the heart of the redesign: provider adapters ship
-default capability dicts, target YAML files override fields, and the CLI can
-override again. All three collapse through `deep_merge`, then `Capabilities`
-gives the adapters a typed, validated view.
-"""
+"""Capability merge (provider defaults <- target <- CLI via deep_merge) + typed parsing."""
 
 from src.capabilities import (
     AudioShape,

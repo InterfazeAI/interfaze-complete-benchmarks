@@ -1,6 +1,6 @@
 """MMMLU: 14-language MCQ; per-language accuracy, macro-averaged headline.
 
-Two variants (as in the original): `lite` (opencompass/mmmlu_lite, ~20k, the
+Two variants: `lite` (opencompass/mmmlu_lite, ~20k, the
 default and what the archived leaderboard numbers use) and `full`
 (openai/MMMLU, ~196k). Pick with --variant.
 """
@@ -38,8 +38,7 @@ LANGUAGES = [
     "ZH_CN",
 ]
 
-# English meta-instruction held constant across all languages so the parser can
-# rely on Latin A-D output.
+# English instruction for every language so the parser can rely on Latin A-D output.
 _PROMPT = (
     "The following is a multiple choice question. Respond with only a single "
     "letter (A, B, C, or D) corresponding to the correct answer. Do not "
@@ -67,8 +66,7 @@ def parse_answer(text: str) -> str | None:
 
 
 def _build_sample(row: dict, lang: str, i: int, variant: str) -> dict:
-    # lite (opencompass) and full (openai/MMMLU) use different column names +
-    # id sources; the prompt/answer semantics are identical.
+    # lite (opencompass) and full (openai/MMMLU) differ only in column names and id source.
     if variant == "lite":
         return {
             "id": f"{lang}:{i}",
@@ -127,7 +125,7 @@ def parse(response, sample) -> str | None:
 
 def score(records: list[dict], samples: list[dict]) -> dict:
     by_id = {s["id"]: s for s in samples}
-    # de-dupe records by id (last-wins), matching the old load_records
+    # de-dupe records by id, last wins
     latest = {r["id"]: r for r in records if r["id"] in by_id}
 
     by_lang: dict[str, list[bool]] = defaultdict(list)
@@ -158,7 +156,7 @@ def score(records: list[dict], samples: list[dict]) -> dict:
     lang_accs = [v["accuracy"] for v in per_language.values()]
     macro = sum(lang_accs) / len(lang_accs) if lang_accs else 0.0
     n_total = sum(v["n"] for v in per_language.values())
-    # micro reconstructed the same lossy way the original did (float->int per lang)
+    # deliberately lossy (float->int per lang) to match archived runs; see test_mmmlu_bench parity
     n_correct = sum(int(v["accuracy"] * v["n"]) for v in per_language.values())
     micro = n_correct / n_total if n_total else 0.0
 

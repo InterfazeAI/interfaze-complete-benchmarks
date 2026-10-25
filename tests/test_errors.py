@@ -1,7 +1,5 @@
-"""Error classification — turns a provider exception into the signal the
-fallback ladder acts on. Every PARAM_REJECTED case here is a real 4xx the audit
-saw a model raise (Gemini "MINIMAL not supported", grok "Reasoning is
-mandatory", GPT-5 temperature-under-reasoning).
+"""Error classification. Every PARAM_REJECTED case is a real 4xx a model raised
+(Gemini "MINIMAL not supported", grok "Reasoning is mandatory", GPT-5 temperature).
 """
 
 from src.errors import ErrorKind, classify

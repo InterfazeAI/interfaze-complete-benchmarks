@@ -1,7 +1,7 @@
 """
 OlmOCR Benchmark for Reducto /parse.
 
-Mirrors olmocr_bench.py (interfaze) but uses Reducto's document-parse API.
+Mirrors harness.py (chat targets) but uses Reducto's document-parse API.
 
 Usage:
     uv run -m benchmarks.olmocr.olmocr_bench_reducto

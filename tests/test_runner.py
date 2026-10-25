@@ -117,11 +117,10 @@ async def test_fatal_error_records_failure_without_retry(tmp_path):
 
 
 async def test_build_request_is_bounded_by_max_in_flight(tmp_path):
-    """Requests must be built lazily as workers pick up samples — not all up
-    front. Otherwise a full image benchmark decodes/encodes every image at once
-    and OOMs CI. inflight is incremented in build_request and decremented in
-    parse; all samples succeed here, so the pairing holds (parse runs only on
-    success)."""
+    """Requests are built lazily as workers pull samples (eager building OOMs CI).
+
+    inflight pairs build_request with parse, which holds only because every sample succeeds.
+    """
     ids = [str(i) for i in range(10)]
     adapter = MapAdapter({i: ["ok"] for i in ids})
     store = RunStore("t", "m", root=tmp_path)
@@ -202,8 +201,7 @@ async def test_failover_to_next_route_on_fatal(tmp_path):
 
 
 async def test_no_failover_on_empty_content(tmp_path):
-    # EMPTY_CONTENT on every retry: the backup runs the same weights, so failing
-    # over would just double the bill — it must NOT be tried.
+    # the backup runs the same weights, so failing over would only double the bill
     empty = MapAdapter({"a": ["", "", "", ""]})
     backup = MapAdapter({"a": ["ok"]})
     store = RunStore("t", "m", root=tmp_path)

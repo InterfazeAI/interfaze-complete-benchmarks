@@ -16,9 +16,8 @@ class ErrorKind(str, Enum):
 @dataclass
 class Classification:
     kind: ErrorKind
-    action: str | None = (
-        None  # raise_thinking_floor | force_reasoning_floor | drop_temperature | drop_param
-    )
+    # raise_thinking_floor | force_reasoning_floor | drop_temperature | drop_param
+    action: str | None = None
     param: str | None = None
     message: str = ""
 

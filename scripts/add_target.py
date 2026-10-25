@@ -7,9 +7,8 @@ Used by the add-target GitHub workflow (which opens a PR) and locally:
         --capabilities-json '{"reasoning":{"style":"effort","off_value":"none","on_value":"high","true_off":false}}' \\
         --ci-regression
 
-The entry is appended as text (preserving the file's comments), then the whole
-file is re-parsed and the new target must resolve to typed capabilities + build
-its adapter — otherwise nothing is written and it exits non-zero.
+Appended as text to keep the file's comments; written only if the new target
+resolves its capabilities and adapter.
 """
 
 from __future__ import annotations

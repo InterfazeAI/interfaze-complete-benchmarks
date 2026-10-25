@@ -1,7 +1,5 @@
-"""Response normalization — unify the three response shapes and the
-reasoning-token fallbacks the audit found (Fireworks reports reasoning tokens at
-the top level of usage; Gemini as thoughts_token_count). Duck-typed fakes stand
-in for the SDK objects so this stays a pure unit test.
+"""Response normalization across the three shapes, incl. reasoning-token fallbacks
+(Fireworks: top-level usage; Gemini: thoughts_token_count). Duck-typed SDK fakes.
 """
 
 from types import SimpleNamespace as NS

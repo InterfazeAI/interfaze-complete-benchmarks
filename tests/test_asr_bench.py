@@ -1,8 +1,6 @@
 """ASR benchmark: normalize/parse units + offline scoring-parity replay.
 
-The parity test replays each archived ASR run through the new score and asserts
-corpus WER, time-weighted WER, CER, and counts match the archived metrics —
-proving the port reproduces the numbers with no audio calls.
+The replay re-scores each archived run (skipped when absent) and must match its WER/CER.
 """
 
 import json

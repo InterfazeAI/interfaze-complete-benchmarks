@@ -28,8 +28,7 @@ def test_parse_variant_restores_plus_and_g_datasets():
 
 
 def test_build_request_embedded_image_or_lazy_idx(monkeypatch):
-    """Smokes embed the image; full runs carry an index and read the image
-    lazily from _DATASET (so the samples list doesn't hold all 8.8k images)."""
+    """Smokes embed the image; full runs carry an index and read _DATASET lazily."""
     from PIL import Image
 
     img = Image.new("RGB", (16, 16))

@@ -7,10 +7,8 @@ Detailed benchmark scores for every model with results on disk.
     uv run python scripts/report_scores.py --list          # just the model names
     uv run python scripts/report_scores.py --model inkling --tsv   # paste into Sheets
 
-Reads the results/<benchmark>/<target>/metrics.json contract (written by the CLI)
-plus the olmOCR run logs (olmOCR-bench prints its per-split table to stdout
-instead of persisting metrics, so the logs are the only source for those
-numbers). One row per target; the contract keys by (benchmark, target).
+Reads the results/<benchmark>/<target>/metrics.json contract; olmOCR scores come only
+from the run logs harness.py tees (its metrics.json isn't read and lacks the ± CI).
 """
 
 from __future__ import annotations
@@ -25,10 +23,7 @@ sys.path.insert(0, str(ROOT))  # so `src` is importable when run as a script
 RESULTS = ROOT / "results"
 LOGS = ROOT / "logs"
 
-# ---------------------------------------------------------------------------
 # Column orders, exactly as the sheet expects them
-# ---------------------------------------------------------------------------
-
 OCR_COLS = [
     ("Avg Real", "en_overall"),
     ("Recog", "text_recognition"),
@@ -147,11 +142,6 @@ MMMU_VIS_SUBJECTS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Loading
-# ---------------------------------------------------------------------------
-
-
 def canon(model: str) -> str:
     """Bare model name, provider prefixes and slug mangling removed."""
     m = model.strip().rsplit("/", 1)[-1].lower()
@@ -169,8 +159,7 @@ def _pct(x):
 
 
 def load_metrics() -> dict:
-    """{model: {benchmark_key: payload}} from the results/<benchmark>/<target>/
-    metrics.json contract (written by the CLI)."""
+    """{model: {benchmark_key: payload}} from the results/ metrics.json contract."""
     from src.results import discover
 
     out: dict[str, dict] = {}
@@ -259,10 +248,8 @@ def load_metrics() -> dict:
 
 
 def load_olmocr() -> dict:
-    """olmOCR-bench prints its table to stdout, so parse the run logs."""
+    """Parse olmOCR-bench's stdout table from captured logs, runs or pasted summaries."""
     out: dict[str, dict] = {}
-    # olmOCR-bench prints its table to stdout and persists nothing, so scan any
-    # captured output: per-step suite logs, standalone runs, or a pasted summary.
     candidates = []
     for pat in ("**/olmocr*.log", "**/*olmocr*.txt", "**/suite*.log"):
         candidates += sorted(LOGS.glob(pat))
@@ -292,11 +279,6 @@ def load_olmocr() -> dict:
             "source": str(log.relative_to(ROOT)),
         }
     return out
-
-
-# ---------------------------------------------------------------------------
-# Rendering
-# ---------------------------------------------------------------------------
 
 
 def fmt(v, width=7):
@@ -518,7 +500,6 @@ def main():
                 sys.exit(f"No model matching {want!r}. Known: {', '.join(known)}")
             chosen += hits
     else:
-        # Interactive by default.
         print("Models with results:\n")
         for i, m in enumerate(known, 1):
             n = len(data.get(m, {})) + (1 if m in olm else 0)

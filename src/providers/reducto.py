@@ -24,8 +24,6 @@ reducto_client: Any = Reducto(
 )  # SDK stubs are strict; used dynamically
 
 
-# ---------- Usage & budget tracking (thread-safe) -------------------------
-
 # Parse r-1 is $10 / 1,000 pages, all-in (docs: reference/credit-usage; blog).
 R1_USD_PER_PAGE = 0.01
 BUDGET_CAP_USD = float(os.getenv("REDUCTO_BUDGET_USD", "20.0"))
@@ -54,11 +52,7 @@ def configure_usage(
     ledger: str | Path | None = None,
     cap_usd: float | None = None,
 ) -> None:
-    """Set incremental-persistence paths and (optionally) the budget cap.
-
-    With `snapshot`/`ledger` set, every recorded call is persisted immediately,
-    so a crash or Ctrl-C mid-run never loses cost accounting.
-    """
+    """Set per-call persistence paths (crash-safe cost accounting) and optionally the cap."""
     global _snapshot_path, _ledger_path, BUDGET_CAP_USD
     if snapshot is not None:
         _snapshot_path = Path(snapshot)
@@ -82,10 +76,7 @@ def _usage_get(usage, key, default=0):
 
 
 def _parse_model(usage) -> str | None:
-    """Model witness. parse_r1 normalizes the per-block model (result.chunks[].
-    blocks[].extra.model) into usage['parse_model']; other API shapes may instead
-    expose usage.usage_breakdown.parse_model.
-    """
+    """usage['parse_model'] (set by parse_r1), else usage.usage_breakdown.parse_model."""
     pm = _usage_get(usage, "parse_model", None)
     if pm:
         return pm
@@ -112,21 +103,12 @@ def _model_from_body(body: dict) -> str | None:
 
 
 def _usd_from_usage(usage) -> float:
-    """Authoritative dollar cost = pages × the r-1 all-in list rate ($0.01/page).
-
-    The account's raw `credits` unit does not map 1:1 to dollars via the docs'
-    example, so we bill on the published per-page rate (conservative) and keep
-    raw credits separately for dashboard reconciliation.
-    """
+    """Pages × the r-1 list rate; raw `credits` don't map 1:1 to dollars, so are kept apart."""
     return float(_usage_get(usage, "num_pages", 0) or 0) * R1_USD_PER_PAGE
 
 
 def reserve_budget(est_usd: float) -> None:
-    """Atomically reserve estimated spend; raise BudgetExceeded if over cap.
-
-    Reserving before the call (and settling after) keeps concurrent callers from
-    collectively overshooting the cap.
-    """
+    """Atomically reserve estimated spend so concurrent callers can't jointly overshoot the cap."""
     with _usage_lock:
         projected = _usage_state["usd"] + _usage_state["reserved"] + est_usd
         if projected > BUDGET_CAP_USD:
@@ -146,11 +128,7 @@ def release_reservation(est_usd: float) -> None:
 def record_usage(
     endpoint: str, usage, *, model: str | None = None, reserved: float = 0.0
 ) -> None:
-    """Tally a single API response's usage and persist. Safe across threads.
-
-    `reserved` releases the matching pre-call reservation atomically with the
-    settle. Accepts an SDK usage object or a raw JSON dict.
-    """
+    """Tally one response's usage (SDK object or dict), settle `reserved`, and persist."""
     if usage is None:
         if reserved:
             release_reservation(reserved)
@@ -273,19 +251,9 @@ def parse_r1(
 ) -> tuple[str, str | None, dict]:
     """Parse via Reducto Parse **r-1** at max quality. Returns (markdown, job_id, usage).
 
-    r-1 is a single-pass model: per Reducto's best-practices it handles layout,
-    tables, figures, handwriting and scans natively, and *ignores* the legacy
-    knobs (ocr_system, extraction_mode, intelligent_ordering, summarize_figures,
-    agentic text passes). So max quality here is the minimal correct config —
-    not the legacy enhance stack, which only adds cost/latency under r-1:
-      - settings.model = "r-1"           : select the r-1 model
-      - table_output_format = "html"     : docs' pick for complex/merged-cell tables
-      - merge_tables = True              : rejoin tables split across page breaks
-      - filter_blocks                    : drop Header/Footer/Page Number blocks
-
-    Usage is read from the raw JSON body — the typed ParseUsage omits
-    usage_breakdown.parse_model (the "R-1" engagement witness). Budget is
-    reserved before the call and settled after.
+    r-1 ignores the legacy enhance knobs (ocr_system, agentic, intelligent_ordering, ...),
+    so the minimal config is the max-quality one; html tables are the docs' pick for
+    merged cells. Usage and the engagement witness (_model_from_body) come from the raw body.
     """
     npages = len(list(page_range)) if page_range is not None else 1
     est_usd = R1_USD_PER_PAGE * max(1, npages)
@@ -328,11 +296,7 @@ def parse_file(
     table_format: str = "md",
     timeout: float = 600.0,
 ) -> tuple[str, str | None]:
-    """Parse a previously-uploaded file. Returns (joined_markdown, parse_job_id).
-
-    parse_job_id is None when the response is large (URL result) — extract
-    chaining still works against `reducto://<file_id>` in that case.
-    """
+    """Parse an uploaded file; returns (markdown, job_id), job_id None for large URL results."""
     response = reducto_client.parse.run(
         input=f"reducto://{file_id}",
         timeout=timeout,
@@ -361,10 +325,7 @@ def extract_with_schema(
     system_prompt: str,
     timeout: float = 600.0,
 ) -> Any:
-    """Run extract over an existing parse job (or a file_id fallback).
-
-    Returns the extract.result (dict or list[dict]).
-    """
+    """Extract over a parse job (or the file_id); returns extract.result (dict or list[dict])."""
     extract_input = (
         f"jobid://{parse_job_id}" if parse_job_id else f"reducto://{file_id}"
     )
@@ -382,16 +343,7 @@ def parse_file_to_markdown(
     pages: Iterable[int] | None = None,
     timeout: float = 600.0,
 ) -> str:
-    """Upload a local file (PDF / image) to Reducto, parse it, return joined markdown.
-
-    pages: 1-indexed page numbers to include (None = all pages).
-
-    Quality settings (per Reducto's best-practice docs):
-      - enhance.agentic = [{"scope": "text"}]: VLM second pass; fixes math notation,
-        handwriting, special characters.
-      - enhance.intelligent_ordering = True: improves reading order on multi-column.
-      - formatting.table_output_format = "md": markdown tables (matches our pipelines).
-    """
+    """Upload and parse a PDF/image with the legacy enhance stack; `pages` is 1-indexed."""
     with open(path, "rb") as fh:
         upload = reducto_client.upload(file=fh, timeout=timeout)
 

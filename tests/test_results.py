@@ -1,7 +1,6 @@
 """The single result contract: one slug, one layout
 (results/<benchmark>/<target>/{responses.jsonl,metrics.json,run.json}), and ONE
-content-based discovery so reporting and re-scoring can't disagree (the audit
-found report_scores dropping 5 of 7 RefCOCO runners by prefix mismatch).
+content-based discovery so reporting and re-scoring can't disagree.
 """
 
 import json

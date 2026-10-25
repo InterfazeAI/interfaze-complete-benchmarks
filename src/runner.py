@@ -15,9 +15,7 @@ from src.execute import BenchError, execute
 from src.results import RunStore
 
 _RETRYABLE = {ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT, ErrorKind.EMPTY_CONTENT}
-# Advance to the next provider route only when the host itself won't serve.
-# NOT on EMPTY_CONTENT: the backup runs the same weights and returns the same
-# empty output, so failing over there just doubles the bill for a dead sample.
+# Fail over only when the host won't serve; not on EMPTY_CONTENT (backup runs the same weights).
 _FAILOVER = {ErrorKind.FATAL, ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT}
 
 
@@ -88,13 +86,11 @@ async def run_benchmark(
     completed = store.completed_ids(id_key, done)
     pending = [s for s in samples if s[id_key] not in completed]
 
-    # Live bar on an interactive terminal; quiet in CI (non-tty). initial= lets a
-    # resumed run read e.g. 150/200 instead of restarting the count from zero.
     if progress is None:
-        progress = sys.stderr.isatty()
+        progress = sys.stderr.isatty()  # quiet in CI
     pbar = tqdm(
         total=len(samples),
-        initial=len(samples) - len(pending),
+        initial=len(samples) - len(pending),  # a resumed run continues the count
         desc=desc,
         disable=not progress,
         file=sys.stderr,
@@ -147,10 +143,7 @@ async def run_benchmark(
                 break  # a genuine non-answer from this host; a backup won't help
         await _record_failure(sample, last_err, store, result, lock, id_key, pbar)
 
-    # Bounded worker pool: build_request runs only when a worker pulls a sample,
-    # so at most max_in_flight requests (and their decoded images) exist at once.
-    # An eager gather(process(s) for s in pending) builds every request up front
-    # — for a full image benchmark that decodes all ~10k images and OOMs CI.
+    # Lazy pool: an eager gather would build every request (decoding every image) and OOM CI.
     queue: asyncio.Queue = asyncio.Queue()
     for s in pending:
         queue.put_nowait(s)

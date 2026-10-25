@@ -1,8 +1,4 @@
-"""Target loading + the capability merge chain. Targets live in one file under a
-`targets:` map (key = name); a target declares only what differs from its
-provider's defaults, and per-benchmark / CLI overrides layer on top.
-build_adapter maps the provider to the right adapter class.
-"""
+"""Target loading, the capability merge chain, and provider -> adapter mapping."""
 
 import textwrap
 
@@ -73,8 +69,7 @@ def test_unknown_target_name_raises(tmp_path):
 
 
 def test_target_inherits_provider_defaults(tmp_path):
-    # A fireworks target declares no media; it should inherit audio_url + the
-    # "none is a floor" reasoning semantics from the provider defaults.
+    # declares no media/reasoning; inherits audio_url and the "none is a floor" defaults
     path = _targets(
         tmp_path,
         """

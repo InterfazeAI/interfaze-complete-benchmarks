@@ -108,9 +108,7 @@ def load_samples(
         rows = load_rows(_DATASET_REPO, _SPLIT, sample_size, config=_CONFIGS[variant])
         return [_mk_sample(dict(r), variant) for r in rows]
 
-    # full run: keep the split memory-mapped and read images lazily by idx.
-    # Build samples from an image-free view so the load pass doesn't decode
-    # every image (materializing all ~1730 rows of images OOMs CI).
+    # full run: samples from an image-free view, images read lazily by idx (decoding all OOMs CI)
     from datasets import load_dataset
 
     _DATASET = load_dataset(_DATASET_REPO, _CONFIGS[variant], split=_SPLIT)

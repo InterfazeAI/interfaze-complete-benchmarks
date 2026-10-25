@@ -17,18 +17,12 @@ def strip_markdown_fences(text):
 
 
 def extract_bounding_boxes(predict_str):
-    """
-    Extract coordinates and text from prediction string.
-    Handles markdown fences, normalizes inverted coordinates.
-
-    Returns list of [x1, y1, x2, y2, text] or None.
-    """
+    """Parse [x1, y1, x2, y2, text] boxes (fences stripped, inverted coords fixed), or None."""
     predict_str = strip_markdown_fences(predict_str)
 
     results = []
     seen = set()
 
-    # Try parsing with ast.literal_eval
     try:
         data = ast.literal_eval(predict_str)
     except Exception:
@@ -118,9 +112,7 @@ def extract_bounding_boxes(predict_str):
 
 
 def spotting_evaluation_normalized(prediction_list, img_metas):
-    """Wrapper around spotting_evaluation that normalizes inverted coords
-    in the submission list instead of discarding them."""
-    # Normalize predictions before passing to spotting_evaluation
+    """spotting_evaluation, but inverted coords are normalized instead of discarded."""
     normalized = []
     for item in prediction_list:
         if len(item) != 5:
@@ -177,11 +169,9 @@ def process_predictions(input_path, output_path):
                     bboxes.append([x1, y1, x2, y1, x2, y2, x1, y2])
                     contents.append(text)
                 elif num_coords >= 8 and num_coords == len(parts):
-                    # Edge case: text is purely numeric (e.g. "1700")
-                    # Last value after the polygon coords is the text
-                    # Polygons always have even number of coords (pairs of x,y)
+                    # Numeric text (e.g. "1700"): coords come in pairs, so an odd count
+                    # means the last value is the text
                     if num_coords % 2 == 1:
-                        # Odd count means last "coord" is actually the text
                         coords = [int(p.strip()) for p in parts[: num_coords - 1]]
                         text = parts[num_coords - 1].strip()
                         x_coords = coords[0::2]

@@ -1,8 +1,6 @@
 """GPQA benchmark: parse unit tests + offline scoring-parity replay.
 
-The parity test is the real migration gate: replay each archived responses.jsonl
-through the NEW parse/score and assert the score is bit-identical to the archived
-metrics.json — proving the port preserves scores with zero API spend.
+The replay re-parses each archived run (skipped when absent) and must match it exactly.
 """
 
 import json

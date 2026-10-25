@@ -1,8 +1,7 @@
-"""olmOCR: unit tests for the null-normalization and log parsing.
+"""olmOCR: null-normalization, prompt and log parsing.
 
-olmOCR has no offline score-replay (its scorer needs the full dataset + prints to
-a log, no metrics.json). Parity is by-construction: identical PROMPT, PNG render,
-and null handling. Here we pin those and the log parser against the archived log.
+No offline score replay (the scorer needs the full dataset), so parity rests on
+pinning the prompt, null handling and the log parser.
 """
 
 import pathlib

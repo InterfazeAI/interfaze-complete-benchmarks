@@ -19,8 +19,7 @@ ARCHIVED_TAGS = [
 
 
 def test_build_request_embedded_or_lazy_idx(monkeypatch):
-    """Smokes embed images; full runs carry an index and read images lazily
-    from _DATASET (so the samples list doesn't hold ~1730 rows of images)."""
+    """Smokes embed images; full runs carry an index and read _DATASET lazily."""
     from PIL import Image
 
     img = Image.new("RGB", (16, 16))

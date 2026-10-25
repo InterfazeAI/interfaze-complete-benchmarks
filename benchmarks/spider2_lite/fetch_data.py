@@ -1,14 +1,8 @@
 """
-Fetch Spider 2.0-Lite resources needed for the SQLite subset of the benchmark.
+Fetch Spider 2.0-Lite resources for the SQLite subset (idempotent).
 
-Two downloads:
-    1. The xlang-ai/Spider2 repo (shallow clone) — provides spider2-lite.jsonl,
-       DDL/sample data per local db, gold exec_result CSVs, external-knowledge
-       docs, and the eval standard config.
-    2. The SQLite `.sqlite` database files, hosted in a Google Drive zip. The
-       repo only ships tiny sample JSONs; the real per-table data lives here.
-
-Idempotent: re-running skips work that is already done.
+Shallow-clones xlang-ai/Spider2 (questions, DDL, gold CSVs, docs, eval config), then
+downloads the `.sqlite` DBs from Google Drive — the repo ships only sample JSONs.
 
 Usage:
     uv run -m benchmarks.spider2_lite.fetch_data

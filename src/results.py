@@ -36,8 +36,7 @@ class RunStore:
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def append_response(self, record: dict) -> None:
-        """Append + fsync per row so a crash mid-run loses nothing already
-        billed (the audit found several runners writing only at the end)."""
+        """Append + fsync per row so a crash mid-run loses nothing already billed."""
         self._ensure_dir()
         with open(self.responses_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")

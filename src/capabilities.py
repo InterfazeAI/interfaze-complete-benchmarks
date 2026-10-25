@@ -59,9 +59,8 @@ class ReasoningCap:
     on_value: Any = None  # concrete value sent for the "high"/"on" mode
     true_off: bool = True  # is `off` a real disable, or does it still think?
     temperature_when_on: bool = True  # may temperature accompany active thinking?
-    extra: dict = field(
-        default_factory=dict
-    )  # provider pins, budget/max coupling, etc.
+    # provider pins, budget/max coupling, etc.
+    extra: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

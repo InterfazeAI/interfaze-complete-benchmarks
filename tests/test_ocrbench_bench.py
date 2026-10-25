@@ -1,8 +1,7 @@
 """OCRBench v2: offline parity of the category aggregation.
 
-The per-sample scorer is reused verbatim (not re-tested here). This replays each
-archived scored.json — which already carries per-sample `score` + `type` — through
-the ported `aggregate` and matches en_overall/cn_overall + per-category means.
+Replays archived scored.json files through `aggregate`; the vendored per-sample
+scorer isn't re-tested.
 """
 
 import json
