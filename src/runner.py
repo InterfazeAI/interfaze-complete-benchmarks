@@ -1,0 +1,195 @@
+"""The one execution harness: rate-limit, worker pool, provider failover, retry,
+resume, checkpoint."""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+from dataclasses import dataclass, field
+
+from tqdm import tqdm
+
+from src.capabilities import Capabilities
+from src.errors import ErrorKind
+from src.execute import BenchError, execute
+from src.providers.base import ProviderAdapter
+from src.results import RunStore
+
+_RETRYABLE = {ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT, ErrorKind.EMPTY_CONTENT}
+# Fail over only when the host won't serve; not on EMPTY_CONTENT (backup runs the same weights).
+_FAILOVER = {ErrorKind.FATAL, ErrorKind.RATE_LIMITED, ErrorKind.TRANSIENT}
+
+
+@dataclass
+class Route:
+    provider: str
+    model_id: str
+    adapter: ProviderAdapter
+    caps: Capabilities
+    client: object = None
+
+
+@dataclass
+class RunResult:
+    n_completed: int = 0
+    n_failed: int = 0
+    hints: list[str] = field(default_factory=list)
+
+
+class _RateLimiter:
+    """Token bucket bounding how many requests *start* per second."""
+
+    def __init__(self, rate: float):
+        self.rate = rate
+        self.tokens = float(rate)
+        self.last = None
+        self._lock = asyncio.Lock()
+
+    async def acquire(self):
+        if self.rate <= 0:
+            return
+        while True:
+            async with self._lock:
+                now = asyncio.get_running_loop().time()
+                if self.last is None:
+                    self.last = now
+                self.tokens = min(
+                    self.rate, self.tokens + (now - self.last) * self.rate
+                )
+                self.last = now
+                if self.tokens >= 1:
+                    self.tokens -= 1
+                    return
+            await asyncio.sleep(1.0 / self.rate)
+
+
+async def run_benchmark(
+    *,
+    routes: list[Route],
+    samples,
+    build_request,
+    parse,
+    store: RunStore,
+    id_key: str = "id",
+    done=None,
+    rate_limit: float = 25.0,
+    max_in_flight: int = 8,
+    max_retries: int = 3,
+    backoff_base: float = 1.0,
+    progress: bool | None = None,
+    desc: str = "benchmark",
+) -> RunResult:
+    completed = store.completed_ids(id_key, done or _has_response)
+    pending = [s for s in samples if s[id_key] not in completed]
+
+    if progress is None:
+        progress = sys.stderr.isatty()  # quiet in CI
+    pbar = tqdm(
+        total=len(samples),
+        initial=len(samples) - len(pending),  # a resumed run continues the count
+        desc=desc,
+        disable=not progress,
+        file=sys.stderr,
+        unit="req",
+    )
+
+    limiter = _RateLimiter(rate_limit)
+    result = RunResult()
+    lock = asyncio.Lock()
+
+    async def save(record: dict, *, failed: bool, hints: list[str]) -> None:
+        async with lock:
+            store.append_response(record)
+            if failed:
+                result.n_failed += 1
+            else:
+                result.n_completed += 1
+            for h in hints:
+                if h not in result.hints:
+                    result.hints.append(h)
+            pbar.update(1)
+
+    async def process(sample):
+        req = build_request(sample)
+        last_err = None
+        for route in routes:
+            outcome = None
+            for attempt in range(max_retries + 1):
+                await limiter.acquire()
+                try:
+                    resp, hints = await asyncio.to_thread(
+                        execute,
+                        route.adapter,
+                        route.client,
+                        req,
+                        route.caps,
+                        route.model_id,
+                    )
+                except BenchError as be:
+                    last_err = be
+                    kind = be.classification.kind
+                    if kind in _RETRYABLE and attempt < max_retries:
+                        if backoff_base > 0:
+                            await asyncio.sleep(backoff_base * (2**attempt))
+                        continue
+                    outcome = kind
+                    break
+                prediction = parse(resp, sample)
+                record = _success_record(
+                    sample[id_key], id_key, resp, prediction, hints, route.provider
+                )
+                await save(record, failed=False, hints=hints)
+                return
+            if outcome not in _FAILOVER:
+                break  # a genuine non-answer from this host; a backup won't help
+        assert last_err is not None  # every route attempt failed, so one was recorded
+        record = _failure_record(sample[id_key], id_key, last_err)
+        await save(record, failed=True, hints=[])
+
+    # Lazy pool: an eager gather would build every request (decoding every image) and OOM CI.
+    queue: asyncio.Queue = asyncio.Queue()
+    for s in pending:
+        queue.put_nowait(s)
+
+    async def worker():
+        while True:
+            try:
+                sample = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            await process(sample)
+
+    try:
+        await asyncio.gather(
+            *(worker() for _ in range(min(max_in_flight, len(pending))))
+        )
+    finally:
+        pbar.close()
+    return result
+
+
+def _has_response(record: dict) -> bool:
+    return record.get("response") is not None
+
+
+def _success_record(sample_id, id_key: str, resp, prediction, hints, host: str) -> dict:
+    record = {
+        id_key: sample_id,
+        "response": resp.text,
+        "prediction": prediction,
+        "reasoning_tokens": resp.reasoning_tokens,
+        "host": host,  # which provider actually served this row (failover audit)
+    }
+    if hints:
+        record["capability_hints"] = hints
+    return record
+
+
+def _failure_record(sample_id, id_key: str, err: BenchError) -> dict:
+    return {
+        id_key: sample_id,
+        "response": None,
+        "prediction": None,
+        "error": err.classification.kind.value,
+        "error_message": err.classification.message,
+    }

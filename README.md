@@ -1,206 +1,158 @@
-# Interfaze complete benchmark scripts
+# Interfaze complete benchmark
 
-[Full break down blog](https://interfaze.ai/blog/interfaze-a-new-model-architecture-built-for-high-accuracy-at-scale) | [Leaderboard](https://interfaze.ai/leaderboards)
+[Blog](https://interfaze.ai/blog/interfaze-a-new-model-architecture-built-for-high-accuracy-at-scale) · [Leaderboard](https://interfaze.ai/leaderboards)
 
-Runner scripts for the public benchmarks Interfaze is evaluated on. Each
-benchmark lives in its own directory under `benchmarks/`.
+The runners behind the public benchmarks Interfaze is evaluated on. Point any model from
+`src/targets.yaml` at any benchmark with one command; adding a model is a YAML entry, not code.
 
-## Setup
+## Quick start
+
+**1. Install** — needs Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
 uv sync
 ```
 
-Create a `.env` in the repo root with whichever provider keys you plan to use:
+**2. Add API keys** to a `.env` file in the repo root. You only need keys for the providers
+of the models you run:
 
+```env
+OPENAI_API_KEY=…
+ANTHROPIC_API_KEY=…
+GEMINI_API_KEY=…        # GEMINI_KEY or GOOGLE_API_KEY also work
+FIREWORKS_API_KEY=…
+OPENROUTER_API_KEY=…
+INTERFAZE_API_KEY=…
 ```
-INTERFAZE_API_KEY=...
-OPENAI_API_KEY=...
-ANTHROPIC_API_KEY=...
-GEMINI_KEY=...
-OPENROUTER_API_KEY=...
-JIGSAWSTACK_API_KEY=...   # only for benchmarks/obj_detection/ob_det_api.py
-```
 
-Every runner accepts `--limit N` for a smoke test and `--evaluate-only` /
-`--predict-only` to split prediction and scoring. Re-running a benchmark
-resumes from its checkpoint file — already-completed samples are skipped.
-
----
-
-## OCRBench v2
-
-Links: [paper](https://arxiv.org/abs/2501.00321) · [repo](https://github.com/Yuliang-Liu/MultimodalOCR/tree/main/OCRBench_v2)
+**3. Try a benchmark on a few samples first**, then run it in full:
 
 ```bash
-# Interfaze
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2
-
-# Per-provider runners
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_openai
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_openai_mini
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_anthropic
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_gemini
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_gemini_pro_31
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_grok
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_kimi          # via OpenRouter
-
-# Text-spotting EN subset only
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2_text_spotting_en
-
-# Evaluate without re-running predictions
-uv run -m benchmarks.ocrbench_v2.ocrbench_v2 --evaluate-only
+uv run python -m src list-targets                                         # models you can run
+uv run python -m src run --target gpt-5.5 --benchmark gpqa --sample 5     # quick check (5 samples)
+uv run python -m src run --target gpt-5.5 --benchmark gpqa                # full run
 ```
 
----
-
-## olmOCR-Bench
-
-Links: [repo](https://github.com/allenai/olmocr/tree/main/olmocr/bench) · [dataset](https://huggingface.co/datasets/allenai/olmOCR-bench)
+**4. See the scores:**
 
 ```bash
-# Interfaze
-uv run -m benchmarks.olmocr.olmocr_bench
-
-# Per-provider runners
-uv run -m benchmarks.olmocr.olmocr_bench_openai_mini
-uv run -m benchmarks.olmocr.olmocr_bench_gemini_pro_31
-uv run -m benchmarks.olmocr.olmocr_bench_grok
-
-# Useful flags
-uv run -m benchmarks.olmocr.olmocr_bench --sample           # tiny sample dataset
-uv run -m benchmarks.olmocr.olmocr_bench --generate-only    # predictions only
-uv run -m benchmarks.olmocr.olmocr_bench --skip-generation  # evaluation only
+uv run python scripts/report_scores.py
 ```
 
----
+## Benchmarks
 
-## RefCOCO (Object Detection)
+| Benchmark | `--benchmark` | `--variant` | Extra setup | Links |
+| --- | --- | --- | --- | --- |
+| GPQA Diamond | `gpqa` | — | [Hugging Face login](#gpqa) | [paper](https://arxiv.org/abs/2311.12022) · [data](https://huggingface.co/datasets/Idavidrein/gpqa) |
+| MMMLU | `mmmlu` | `lite` (default), `full` | — | [data](https://huggingface.co/datasets/openai/MMMLU) |
+| MMMU-Pro | `mmmu_pro` | `standard` (default), `vision` | — | [paper](https://arxiv.org/abs/2409.02813) · [data](https://huggingface.co/datasets/MMMU/MMMU_Pro) |
+| OCRBench v2 | `ocrbench_v2` | — | [NLTK corpora](#ocrbench-v2) | [paper](https://arxiv.org/abs/2501.00321) · [repo](https://github.com/Yuliang-Liu/MultimodalOCR/tree/main/OCRBench_v2) |
+| olmOCR | `olmocr` | — | [poppler + Chromium](#olmocr) | [repo](https://github.com/allenai/olmocr/tree/main/olmocr/bench) · [data](https://huggingface.co/datasets/allenai/olmOCR-bench) |
+| RefCOCO | `refcoco` | `val` (default), `testA`, `testB`, `test`, `plus-val`, `plus-testA`, `plus-testB`, `g-val`, `g-test` | — | [paper](https://arxiv.org/abs/1608.00272) · [data](https://huggingface.co/datasets/lmms-lab/RefCOCO) |
+| ASR (VoxPopuli) | `asr` | — | needs an audio-capable model | [data](https://huggingface.co/datasets/ArtificialAnalysis/VoxPopuli-Cleaned-AA) |
+| Spider2-Lite | `spider2` | — | [~4GB data download](#spider2-lite) | [repo](https://github.com/xlang-ai/Spider2) · [paper](https://arxiv.org/abs/2411.07763) |
 
-Links: [RefCOCO/RefCOCO+ paper](https://arxiv.org/abs/1608.00272) · [RefCOCOg paper](https://arxiv.org/abs/1511.02283) · [dataset](https://huggingface.co/datasets/lmms-lab/RefCOCO)
+### Extra setup
 
-Metric: Acc@IoU=0.5 on the referring-expression bounding box.
+One-time steps, only for the benchmarks that need them.
+
+#### GPQA
+
+The dataset is gated: request access on its [Hugging Face page](https://huggingface.co/datasets/Idavidrein/gpqa), then log in with `hf auth login` (or set `HF_TOKEN`).
+
+#### OCRBench v2
+
+Download the NLTK corpora the scorer uses. Run it from **outside** the repo — NLTK refuses to load from a directory that contains the `.venv`:
 
 ```bash
-# Interfaze (RefCOCO val by default)
-uv run -m benchmarks.obj_detection.refcoco
-uv run -m benchmarks.obj_detection.refcoco --split testA
-uv run -m benchmarks.obj_detection.refcoco --dataset lmms-lab/RefCOCO+ --split testB
-
-# Any provider via the multi runner
-uv run -m benchmarks.obj_detection.refcoco_multi --provider openai    --model gpt-5.4
-uv run -m benchmarks.obj_detection.refcoco_multi --provider anthropic --model claude-sonnet-4-6
-uv run -m benchmarks.obj_detection.refcoco_multi --provider gemini    --model gemini-3-flash-preview
-
-# JigsawStack object_detection API (instead of a VLM)
-uv run -m benchmarks.obj_detection.ob_det_api
-
-# Evaluate only
-uv run -m benchmarks.obj_detection.refcoco --evaluate-only
+(cd /tmp && uv run --project "$OLDPWD" python -c \
+ "import nltk; [nltk.download(p, quiet=True) for p in ('wordnet','omw-1.4','punkt','punkt_tab')]")
 ```
 
----
+#### olmOCR
 
-## VoxPopuli-Cleaned-AA (ASR)
-
-Links: [dataset](https://huggingface.co/datasets/ArtificialAnalysis/VoxPopuli-Cleaned-AA)
-
-Metric: WER with Whisper-style text normalization.
+Needs poppler to render PDF pages and headless Chromium to render equations:
 
 ```bash
-# Interfaze
-uv run -m benchmarks.asr.voxpopuli_aa
-
-# Other providers (audio-capable)
-uv run -m benchmarks.asr.voxpopuli_aa_multi --provider gemini    --model gemini-3-flash-preview
-uv run -m benchmarks.asr.voxpopuli_aa_multi --provider openai    --model gpt-4o-audio-preview
-uv run -m benchmarks.asr.voxpopuli_aa_multi --provider anthropic --model claude-sonnet-4-6
-
-# Evaluate only
-uv run -m benchmarks.asr.voxpopuli_aa --evaluate-only
+brew install poppler                  # macOS; on Debian/Ubuntu: sudo apt-get install poppler-utils
+uv run python -m playwright install chromium
 ```
 
----
+The first run downloads the benchmark's ~1,400 PDFs.
 
-## MMMLU (Multilingual MMLU)
+#### Spider2-Lite
 
-Links: [dataset](https://huggingface.co/datasets/openai/MMMLU)
-
-14 languages, exact-match accuracy macro-averaged across languages.
+Clone the Spider2 repo and download its SQLite databases (~4GB) into `benchmarks/spider2_lite/data/`:
 
 ```bash
-# Interfaze
-uv run -m benchmarks.mmmlu.mmmlu
-uv run -m benchmarks.mmmlu.mmmlu --languages DE_DE FR_FR     # subset of languages
-
-# Any provider
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider openai    --model gpt-5.4-mini
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider gemini    --model gemini-3.1-pro-preview
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider anthropic --model claude-sonnet-4-6
-uv run -m benchmarks.mmmlu.mmmlu_multi --provider interfaze --model interfaze-beta
-
-# Evaluate only
-uv run -m benchmarks.mmmlu.mmmlu --evaluate-only
-```
-
----
-
-## MMMU-Pro
-
-Links: [paper](https://arxiv.org/abs/2409.02813) · [dataset](https://huggingface.co/datasets/MMMU/MMMU_Pro)
-
-Two settings: `standard` (text + inline images) and `vision` (rendered question image).
-
-```bash
-# Any provider, standard or vision
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider gemini    --model gemini-3.1-pro-preview --setting standard
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider gemini    --model gemini-3.1-pro-preview --setting vision
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider openai    --model gpt-5.5               --setting standard
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider anthropic --model claude-sonnet-4-6     --setting vision
-uv run -m benchmarks.mmmu_pro.mmmu_pro_multi --provider interfaze --model interfaze-beta        --setting standard
-
-# Run on Modal instead of locally
-bash benchmarks/mmmu_pro/run_full.sh
-bash benchmarks/mmmu_pro/run_smoke.sh
-```
-
----
-
-## GPQA Diamond
-
-Links: [paper](https://arxiv.org/abs/2311.12022) · [dataset](https://huggingface.co/datasets/Idavidrein/gpqa) (config: `gpqa_diamond`)
-
-```bash
-# OpenAI
-uv run -m benchmarks.gpqa.gpqa_openai
-uv run -m benchmarks.gpqa.gpqa_openai --model gpt-5.4-mini
-
-# Gemini
-uv run -m benchmarks.gpqa.gpqa_gemini
-uv run -m benchmarks.gpqa.gpqa_gemini --model gemini-3.1-pro-preview
-
-# Any model via OpenRouter (Grok, Kimi, Anthropic, etc.)
-uv run -m benchmarks.gpqa.gpqa_openrouter --model x-ai/grok-4.3 --thinking on
-uv run -m benchmarks.gpqa.gpqa_openrouter --model moonshotai/kimi-k2.6
-
-# Evaluate only
-uv run -m benchmarks.gpqa.gpqa_openai --evaluate-only
-```
-
----
-
-## Spider 2.0-Lite (SQLite subset, N=135)
-
-Links: [repo](https://github.com/xlang-ai/Spider2) · [paper](https://arxiv.org/abs/2411.07763)
-
-Text-to-SQL with execution-accuracy scoring against per-example SQLite databases.
-
-```bash
-# One-time setup: clone Spider2 + download SQLite databases
 uv run -m benchmarks.spider2_lite.fetch_data
-
-# Run
-uv run -m benchmarks.spider2_lite.spider2_lite
-uv run -m benchmarks.spider2_lite.spider2_lite --predict-only
-uv run -m benchmarks.spider2_lite.spider2_lite --evaluate-only
 ```
+
+## Run options
+
+| Option | What it does |
+| --- | --- |
+| `--sample N` | Runs only the first N samples — a quick check. Results go to `results/_smoke/`, so they never overwrite a full run and don't show up in `report_scores.py`. |
+| `--variant V` | Picks a benchmark variant (see the table above). |
+| `--reasoning off\|low\|medium\|high` | Overrides the reasoning effort (default `off`). Models that can't fully turn reasoning off use their lowest setting. |
+
+- **Interrupted runs resume.** Every answer is saved as it arrives; re-run the same command to continue where it stopped.
+- **Backup providers.** A model can list fallback providers in `targets.yaml`; if the main
+  provider is down or out of quota, requests move to the next one. Providers without a key are skipped with a `skipping route …` message.
+
+## Results
+
+Each run writes to `results/<benchmark>/<model>/` (variants add a suffix, e.g. `mmmu_pro_vision`; ASR results are under `voxpopuli_aa`):
+
+- `metrics.json` — the scores
+- `responses.jsonl` — every model answer, one per line
+- `run.json` — run details (providers used, failures, sample size)
+
+`scripts/report_scores.py` prints every score as tables:
+
+```bash
+uv run python scripts/report_scores.py                       # pick a model interactively
+uv run python scripts/report_scores.py --all                 # every model
+uv run python scripts/report_scores.py --model gpt-5.5       # one model (repeatable)
+uv run python scripts/report_scores.py --model gpt-5.5 --tsv # tab-separated, for pasting into a sheet
+```
+
+## Adding a model
+
+Add an entry to [`src/targets.yaml`](src/targets.yaml). Most models need only a provider and the provider's model id:
+
+```yaml
+targets:
+  my-model:
+    provider: fireworks          # openai | anthropic | gemini | fireworks | openrouter | interfaze
+    model_id: accounts/fireworks/models/my-model
+```
+
+Add `capabilities:` only where the model differs from its provider's defaults — the existing entries show the common cases (e.g. `grok-4.3` can't turn reasoning off, `gemini-2.5-pro` uses a thinking budget). Check the entry loads with `uv run pytest tests/test_targets.py`.
+
+You can also add a model without editing YAML: run the **add-target** workflow from the
+GitHub Actions tab (it opens a PR), or use `uv run python scripts/add_target.py --help` locally.
+
+## CI (GitHub Actions)
+
+| Workflow | When it runs | What it does |
+| --- | --- | --- |
+| `tests.yml` | every push and PR | offline tests and lint (also validates `targets.yaml`) |
+| `benchmark.yml` | manually; weekly; when a `targets.yaml` change is merged | manual: the target and benchmarks you pick (5 samples by default). Weekly: a 5-sample check of every target marked `ci_regression: true`. On merge: a full run for each added or changed target. |
+| `add-target.yml` | manually | a form that adds a model and opens a PR |
+
+`olmocr` and `spider2` don't run in CI (heavy system dependencies and ~4GB of data). The
+workflows need the provider keys and `HF_TOKEN` set as repository secrets.
+
+**Regression check.** The benchmark summary compares each score with a saved baseline in `baselines/<benchmark>/<model>/metrics.json`. To set or update one, copy a full run's
+`results/<benchmark>/<model>/metrics.json` there and commit it. Quick checks are shown next to the baseline but never flagged as regressions.
+
+## Troubleshooting
+
+| Message | Fix |
+| --- | --- |
+| `no API key for any route of target …` | Add the key named in the `skipping route …` line above it to `.env`. |
+| GPQA fails with 401 / gated dataset | [GPQA setup](#gpqa): request access and log in to Hugging Face. |
+| `Resource wordnet not found` (OCRBench v2) | [Download the NLTK corpora](#ocrbench-v2). |
+| `pdfinfo` / `pdftoppm` not found (olmOCR) | [Install poppler](#olmocr). |
+| `Missing …/spider2-lite.jsonl` | [Fetch the Spider2 data](#spider2-lite). |

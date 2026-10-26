@@ -35,7 +35,9 @@ class EquationCache:
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
             # Use the same cache directory as before
-            cache_dir = pathlib.Path.home() / ".cache" / "olmocr" / "bench" / "equations"
+            cache_dir = (
+                pathlib.Path.home() / ".cache" / "olmocr" / "bench" / "equations"
+            )
             cache_dir.mkdir(parents=True, exist_ok=True)
             db_path = str(cache_dir / "cache.db")
         self.db_path = db_path
@@ -62,7 +64,10 @@ class EquationCache:
         with self.lock:
             conn = sqlite3.connect(self.db_path)
             c = conn.cursor()
-            c.execute("SELECT mathml, spans, error FROM equations WHERE eq_hash = ?", (eq_hash,))
+            c.execute(
+                "SELECT mathml, spans, error FROM equations WHERE eq_hash = ?",
+                (eq_hash,),
+            )
             row = c.fetchone()
             conn.close()
         if row:
@@ -160,7 +165,9 @@ _thread_local = threading.local()
 
 # Global thread pool executor with a fixed number of threads
 # Each thread will maintain its own Playwright instance
-_render_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="playwright-render")
+_render_executor = ThreadPoolExecutor(
+    max_workers=8, thread_name_prefix="playwright-render"
+)
 
 
 def _cleanup_executor():
@@ -209,7 +216,9 @@ def _get_thread_local_browser():
     return owner
 
 
-def _render_in_executor(equation, bg_color, text_color, font_size, use_cache, debug_dom, eq_hash):
+def _render_in_executor(
+    equation, bg_color, text_color, font_size, use_cache, debug_dom, eq_hash
+):
     """
     Function to be run in the executor thread pool.
     Each thread maintains its own Playwright instance.
@@ -238,7 +247,9 @@ def _do_render(context, equation, bg_color, text_color, font_size, debug_dom):
     katex_js_path = os.path.join(script_dir, "katex.min.js")
 
     if not os.path.exists(katex_css_path) or not os.path.exists(katex_js_path):
-        raise FileNotFoundError(f"KaTeX files not found. Please ensure katex.min.css and katex.min.js are in {script_dir}")
+        raise FileNotFoundError(
+            f"KaTeX files not found. Please ensure katex.min.css and katex.min.js are in {script_dir}"
+        )
 
     # Create a new page.
     page = context.new_page()
@@ -277,7 +288,9 @@ def _do_render(context, equation, bg_color, text_color, font_size, debug_dom):
     katex_loaded = page.evaluate("typeof katex !== 'undefined'")
     if not katex_loaded:
         page.close()
-        raise RuntimeError("KaTeX library failed to load. Check your katex.min.js file.")
+        raise RuntimeError(
+            "KaTeX library failed to load. Check your katex.min.js file."
+        )
 
     try:
         error_message = page.evaluate(f"""
@@ -399,7 +412,16 @@ def render_equation(
             return cached
 
     # Submit the rendering task to the thread pool executor
-    future = _render_executor.submit(_render_in_executor, equation, bg_color, text_color, font_size, use_cache, debug_dom, eq_hash)
+    future = _render_executor.submit(
+        _render_in_executor,
+        equation,
+        bg_color,
+        text_color,
+        font_size,
+        use_cache,
+        debug_dom,
+        eq_hash,
+    )
 
     # Wait for the result
     rendered_eq = future.result()
@@ -411,7 +433,9 @@ def render_equation(
     return rendered_eq
 
 
-def compare_rendered_equations(reference: RenderedEquation, hypothesis: RenderedEquation) -> bool:
+def compare_rendered_equations(
+    reference: RenderedEquation, hypothesis: RenderedEquation
+) -> bool:
     """
     Compare two RenderedEquation objects.
     First, check if the normalized MathML of the hypothesis is contained within that of the reference.
@@ -424,7 +448,11 @@ def compare_rendered_equations(reference: RenderedEquation, hypothesis: Rendered
             soup = BeautifulSoup(mathml, "xml")
             semantics = soup.find("semantics")
             if semantics:
-                inner_parts = [str(child) for child in semantics.contents if getattr(child, "name", None) != "annotation"]
+                inner_parts = [
+                    str(child)
+                    for child in semantics.contents
+                    if getattr(child, "name", None) != "annotation"
+                ]
                 return "".join(inner_parts)
             else:
                 return str(soup)
@@ -451,7 +479,8 @@ def compare_rendered_equations(reference: RenderedEquation, hypothesis: Rendered
             SpanInfo(
                 c,
                 BoundingBox(
-                    span_info.bounding_box.x + (span_info.bounding_box.width * index) / total_elems,
+                    span_info.bounding_box.x
+                    + (span_info.bounding_box.width * index) / total_elems,
                     span_info.bounding_box.y,
                     span_info.bounding_box.width / total_elems,
                     span_info.bounding_box.height,

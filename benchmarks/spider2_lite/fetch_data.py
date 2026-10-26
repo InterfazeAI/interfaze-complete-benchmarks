@@ -1,14 +1,8 @@
 """
-Fetch Spider 2.0-Lite resources needed for the SQLite subset of the benchmark.
+Fetch Spider 2.0-Lite resources for the SQLite subset (idempotent).
 
-Two downloads:
-    1. The xlang-ai/Spider2 repo (shallow clone) — provides spider2-lite.jsonl,
-       DDL/sample data per local db, gold exec_result CSVs, external-knowledge
-       docs, and the eval standard config.
-    2. The SQLite `.sqlite` database files, hosted in a Google Drive zip. The
-       repo only ships tiny sample JSONs; the real per-table data lives here.
-
-Idempotent: re-running skips work that is already done.
+Shallow-clones xlang-ai/Spider2 (questions, DDL, gold CSVs, docs, eval config), then
+downloads the `.sqlite` DBs from Google Drive — the repo ships only sample JSONs.
 
 Usage:
     uv run -m benchmarks.spider2_lite.fetch_data
@@ -39,7 +33,10 @@ def ensure_repo() -> None:
     print(f"[clone] xlang-ai/Spider2 (depth=1) -> {REPO_DIR}")
     subprocess.run(
         [
-            "git", "clone", "--depth", "1",
+            "git",
+            "clone",
+            "--depth",
+            "1",
             "https://github.com/xlang-ai/Spider2.git",
             str(REPO_DIR),
         ],
@@ -58,7 +55,10 @@ def ensure_sqlite_dbs() -> None:
         try:
             import gdown
         except ImportError:
-            print("ERROR: `gdown` is required to download from Google Drive.", file=sys.stderr)
+            print(
+                "ERROR: `gdown` is required to download from Google Drive.",
+                file=sys.stderr,
+            )
             print("       Add it with `uv add gdown` and re-run.", file=sys.stderr)
             sys.exit(1)
         print(f"[download] Google Drive id={SQLITE_ZIP_DRIVE_ID} -> {zip_path}")

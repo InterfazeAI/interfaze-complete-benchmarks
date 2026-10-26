@@ -1,11 +1,10 @@
 """
 OlmOCR Benchmark for Reducto /parse.
 
-Mirrors olmocr_bench.py (interfaze) but uses Reducto's document-parse API.
+Mirrors harness.py (chat targets) but uses Reducto's document-parse API.
 
 Usage:
     uv run -m benchmarks.olmocr.olmocr_bench_reducto
-    uv run -m benchmarks.olmocr.olmocr_bench_reducto --sample
     uv run -m benchmarks.olmocr.olmocr_bench_reducto --skip-generation
     uv run -m benchmarks.olmocr.olmocr_bench_reducto --generate-only
 """
@@ -24,10 +23,10 @@ from tqdm.asyncio import tqdm_asyncio
 load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-SAMPLE_DATA_DIR = Path(__file__).resolve().parent / "bench" / "sample_data"
 FULL_DATA_DIR = Path(__file__).resolve().parent / "bench" / "full_data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 USAGE_OUTPUT = RESULTS_DIR / "olmocr_reducto_usage.json"
+LEDGER_OUTPUT = RESULTS_DIR / "olmocr_reducto_ledger.jsonl"
 CANDIDATE_NAME = "reducto"
 RATE_LIMIT = 8
 MAX_RETRIES = 3
@@ -85,8 +84,7 @@ def download_full_dataset():
                 tests = [json.loads(l) for l in f if l.strip()]
             data_dir.mkdir(parents=True, exist_ok=True)
             with open(jsonl_dest, "w") as f:
-                for t in tests:
-                    f.write(json.dumps(t) + "\n")
+                f.writelines(json.dumps(t) + "\n" for t in tests)
         print(f"    {split}: {len(tests)} tests")
         for t in tests:
             all_pdfs.add(t["pdf"])
@@ -115,6 +113,8 @@ def download_full_dataset():
 async def process_page(pdf_path, page_num, output_path, rate_limiter):
     from olmocr.bench.runners.run_reducto import run_reducto
 
+    from src.providers.reducto import BudgetExceeded
+
     for attempt in range(MAX_RETRIES):
         await rate_limiter.acquire()
         try:
@@ -123,6 +123,8 @@ async def process_page(pdf_path, page_num, output_path, rate_limiter):
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(result)
             return True
+        except BudgetExceeded:
+            raise  # not transient — abort the run rather than burn retries
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(2**attempt)
@@ -134,10 +136,17 @@ async def process_page(pdf_path, page_num, output_path, rate_limiter):
 
 
 async def generate_outputs(data_dir: Path):
+    from src.providers.reducto import configure_usage
+
+    configure_usage(
+        snapshot=USAGE_OUTPUT,
+        ledger=LEDGER_OUTPUT,
+        cap_usd=float(os.getenv("REDUCTO_BUDGET_USD", "20.0")),
+    )
+
     pdf_folder = data_dir / "pdfs"
     output_folder = data_dir / CANDIDATE_NAME
 
-    
     pdf_pages = set()
     for jsonl_file in data_dir.glob("*.jsonl"):
         with open(jsonl_file) as f:
@@ -171,20 +180,34 @@ async def generate_outputs(data_dir: Path):
         print("All outputs already exist, skipping generation.")
         return True
     print(f"Processing {len(tasks)} pages...")
-    results = await tqdm_asyncio.gather(
-        *tasks, desc=f"Generating {CANDIDATE_NAME} outputs"
+    from src.providers.reducto import (
+        BudgetExceeded,
+        get_usage_snapshot,
+        write_usage_snapshot,
     )
+
+    try:
+        results = await tqdm_asyncio.gather(
+            *tasks, desc=f"Generating {CANDIDATE_NAME} outputs"
+        )
+    except BudgetExceeded as e:
+        write_usage_snapshot(USAGE_OUTPUT)
+        snap = get_usage_snapshot()
+        print(f"\n*** BUDGET STOP: {e}")
+        print(f"    Spent so far: ${snap['usd']:.4f} over {snap['pages']} pages")
+        print(f"    Partial usage written to {USAGE_OUTPUT}; rerun to resume.")
+        return False
+
     num_success = sum(1 for r in results if r)
     num_failed = len(results) - num_success
     print(f"Done: {num_success} succeeded, {num_failed} failed")
 
-    try:
-        from src.commons_reducto import write_usage_snapshot
-
-        write_usage_snapshot(USAGE_OUTPUT)
-        print(f"Usage written to {USAGE_OUTPUT}")
-    except Exception as e:
-        print(f"  (usage snapshot failed: {e})")
+    write_usage_snapshot(USAGE_OUTPUT)
+    snap = get_usage_snapshot()
+    print(
+        f"Usage: ${snap['usd']:.4f} over {snap['pages']} pages "
+        f"({snap['credits']:.1f} credits) -> {USAGE_OUTPUT}"
+    )
 
     return num_failed == 0
 
@@ -207,17 +230,12 @@ async def main():
     parser = argparse.ArgumentParser(
         description=f"Run OlmOCR benchmark with {CANDIDATE_NAME}"
     )
-    parser.add_argument("--sample", action="store_true")
     parser.add_argument("--skip-generation", action="store_true")
     parser.add_argument("--generate-only", action="store_true")
     args = parser.parse_args()
 
-    if args.sample:
-        data_dir = SAMPLE_DATA_DIR
-        print("=== Using sample data ===")
-    else:
-        print("=== Downloading full olmOCR-bench dataset from HuggingFace ===")
-        data_dir = download_full_dataset()
+    print("=== Downloading full olmOCR-bench dataset from HuggingFace ===")
+    data_dir = download_full_dataset()
 
     if not args.skip_generation:
         print(f"\n=== Generating {CANDIDATE_NAME} outputs ===")

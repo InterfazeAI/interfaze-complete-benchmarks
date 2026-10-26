@@ -3,7 +3,12 @@ from typing import List, Tuple
 import numpy as np
 
 
-def calculate_bootstrap_ci(test_scores: List[float], n_bootstrap: int = 1000, ci_level: float = 0.95, splits: List[int] = None) -> Tuple[float, float]:
+def calculate_bootstrap_ci(
+    test_scores: List[float],
+    n_bootstrap: int = 1000,
+    ci_level: float = 0.95,
+    splits: List[int] = None,
+) -> Tuple[float, float]:
     """
     Calculate bootstrap confidence interval for test scores, respecting category splits.
 
@@ -35,7 +40,9 @@ def calculate_bootstrap_ci(test_scores: List[float], n_bootstrap: int = 1000, ci
     else:
         # Validate splits
         if sum(splits) != len(scores):
-            raise ValueError(f"Sum of splits ({sum(splits)}) must equal length of test_scores ({len(scores)})")
+            raise ValueError(
+                f"Sum of splits ({sum(splits)}) must equal length of test_scores ({len(scores)})"
+            )
 
         # Convert flat scores list to a list of category scores
         category_scores = []
@@ -52,7 +59,9 @@ def calculate_bootstrap_ci(test_scores: List[float], n_bootstrap: int = 1000, ci
             for cat_scores in category_scores:
                 if len(cat_scores) > 0:
                     # Sample with replacement within this category
-                    cat_sample = np.random.choice(cat_scores, size=len(cat_scores), replace=True)
+                    cat_sample = np.random.choice(
+                        cat_scores, size=len(cat_scores), replace=True
+                    )
                     category_means.append(np.mean(cat_sample))
 
             # Overall score is average of category means (if any categories have scores)
@@ -68,7 +77,11 @@ def calculate_bootstrap_ci(test_scores: List[float], n_bootstrap: int = 1000, ci
 
 
 def perform_permutation_test(
-    scores_a: List[float], scores_b: List[float], n_permutations: int = 10000, splits_a: List[int] = None, splits_b: List[int] = None
+    scores_a: List[float],
+    scores_b: List[float],
+    n_permutations: int = 10000,
+    splits_a: List[int] = None,
+    splits_b: List[int] = None,
 ) -> Tuple[float, float]:
     """
     Perform a permutation test to determine if there's a significant difference
@@ -133,9 +146,13 @@ def perform_permutation_test(
         # For category-based permutation test, we need to maintain category structure
         # Validate that the splits match the score lengths
         if splits_a is not None and sum(splits_a) != len(scores_a):
-            raise ValueError(f"Sum of splits_a ({sum(splits_a)}) must equal length of scores_a ({len(scores_a)})")
+            raise ValueError(
+                f"Sum of splits_a ({sum(splits_a)}) must equal length of scores_a ({len(scores_a)})"
+            )
         if splits_b is not None and sum(splits_b) != len(scores_b):
-            raise ValueError(f"Sum of splits_b ({sum(splits_b)}) must equal length of scores_b ({len(scores_b)})")
+            raise ValueError(
+                f"Sum of splits_b ({sum(splits_b)}) must equal length of scores_b ({len(scores_b)})"
+            )
 
         # Create category structures
         categories_a = []

@@ -31,8 +31,19 @@ from .utils import calculate_bootstrap_ci
 
 
 def evaluate_candidate(
-    candidate_folder: str, all_tests: List[BasePDFTest], pdf_basenames: List[str], force: bool = False
-) -> Tuple[float, int, List[str], List[str], Dict[str, List[float]], List[float], Dict[str, Dict[int, List[Tuple[BasePDFTest, bool, str]]]]]:
+    candidate_folder: str,
+    all_tests: List[BasePDFTest],
+    pdf_basenames: List[str],
+    force: bool = False,
+) -> Tuple[
+    float,
+    int,
+    List[str],
+    List[str],
+    Dict[str, List[float]],
+    List[float],
+    Dict[str, Dict[int, List[Tuple[BasePDFTest, bool, str]]]],
+]:
     """
     For the candidate folder (pipeline tool output), validate that it contains at least one .md file
     (i.e. repeated generations like _pg{page}_repeat{repeat}.md) for every PDF in the pdf folder.
@@ -59,25 +70,40 @@ def evaluate_candidate(
 
     # Map each PDF to its corresponding MD repeats (e.g., doc1_pg1_repeat1.md, doc1_pg2_repeat2.md, etc.)
     pdf_to_md_files = {}
-    all_files = list(glob.glob(os.path.join(candidate_folder, "**/*.md"), recursive=True))
+    all_files = list(
+        glob.glob(os.path.join(candidate_folder, "**/*.md"), recursive=True)
+    )
 
     for pdf_name in pdf_basenames:
         md_base = os.path.splitext(pdf_name)[0]
         md_regex = re.compile(rf"^{re.escape(md_base)}_pg\d+_repeat\d+\.md$")
-        md_files = [f for f in all_files if md_regex.match(os.path.relpath(f, candidate_folder))]
+        md_files = [
+            f for f in all_files if md_regex.match(os.path.relpath(f, candidate_folder))
+        ]
 
         if not md_files and not force:
             candidate_errors.append(
-                f"Candidate '{candidate_name}' is missing MD repeats for {pdf_name} " f"(expected files matching {md_base}_pg{{page}}_repeat*.md)."
+                f"Candidate '{candidate_name}' is missing MD repeats for {pdf_name} "
+                f"(expected files matching {md_base}_pg{{page}}_repeat*.md)."
             )
         else:
             pdf_to_md_files[pdf_name] = md_files
 
     if candidate_errors:
-        return (0.0, len(all_tests), candidate_errors, test_failures, test_type_breakdown, all_test_scores, test_results)
+        return (
+            0.0,
+            len(all_tests),
+            candidate_errors,
+            test_failures,
+            test_type_breakdown,
+            all_test_scores,
+            test_results,
+        )
 
     # Define an inner function to evaluate a single test
-    def process_test(test: BasePDFTest) -> Tuple[float, str, str, List[str], Tuple[bool, str]]:
+    def process_test(
+        test: BasePDFTest,
+    ) -> Tuple[float, str, str, List[str], Tuple[bool, str]]:
         local_errors = []
         test_failure = None
         pdf_name = test.pdf
@@ -91,7 +117,9 @@ def evaluate_candidate(
         md_base = os.path.splitext(pdf_name)[0]
         md_files = pdf_to_md_files.get(pdf_name, [])
         # Filter MD files for the specific page corresponding to the test
-        page_md_files = [f for f in md_files if re.search(rf"_pg{test.page}_", os.path.basename(f))]
+        page_md_files = [
+            f for f in md_files if re.search(rf"_pg{test.page}_", os.path.basename(f))
+        ]
         if not page_md_files:
             local_errors.append(
                 f"Candidate '{candidate_name}' is missing MD repeats for {pdf_name} page {test.page} "
@@ -123,18 +151,28 @@ def evaluate_candidate(
                 explanations.append(str(e))
 
         test_avg = repeat_passes / num_repeats if num_repeats > 0 else 0.0
-        final_passed = test_avg > 0.5  # Consider test passed if majority of repeats pass
+        final_passed = (
+            test_avg > 0.5
+        )  # Consider test passed if majority of repeats pass
         final_explanation = explanations[0] if explanations else "All repeats passed"
 
         # Store the test result for reporting
-        test_results[pdf_name][test.page].append((test, final_passed, final_explanation))
+        test_results[pdf_name][test.page].append(
+            (test, final_passed, final_explanation)
+        )
 
         if test_avg < 1.0:
             test_failure = (
                 f"Test {test.id} on {md_base} page {test.page} average pass ratio: {test_avg:.3f} "
                 f"({repeat_passes}/{num_repeats} repeats passed). Ex: {explanations[0] if explanations else 'No explanation'}"
             )
-        return (test_avg, test_failure, test.type, local_errors, (final_passed, final_explanation))
+        return (
+            test_avg,
+            test_failure,
+            test.type,
+            local_errors,
+            (final_passed, final_explanation),
+        )
 
     total_test_score = 0.0
     futures = []
@@ -142,7 +180,12 @@ def evaluate_candidate(
     with ThreadPoolExecutor(max_workers=min(os.cpu_count() or 1, 64)) as executor:
         futures = [executor.submit(process_test, test) for test in all_tests]
         # tqdm progress bar for this candidate's tests
-        for future in tqdm(as_completed(futures), total=len(futures), desc=f"Evaluating tests for {candidate_name}", unit="test"):
+        for future in tqdm(
+            as_completed(futures),
+            total=len(futures),
+            desc=f"Evaluating tests for {candidate_name}",
+            unit="test",
+        ):
             test_avg, test_failure, test_type, errors, _ = future.result()
             all_test_scores.append(test_avg)
             total_test_score += test_avg
@@ -156,7 +199,15 @@ def evaluate_candidate(
                 candidate_errors.extend(local_errors)
 
     overall_score = total_test_score / len(all_tests) if all_tests else 0.0
-    return (overall_score, len(all_tests), candidate_errors, test_failures, test_type_breakdown, all_test_scores, test_results)
+    return (
+        overall_score,
+        len(all_tests),
+        candidate_errors,
+        test_failures,
+        test_type_breakdown,
+        all_test_scores,
+        test_results,
+    )
 
 
 def main():
@@ -171,8 +222,17 @@ def main():
         action="store_true",
         help="Run benchmark even if some files are missing",
     )
-    parser.add_argument("--candidate", type=str, default=None, help="Run test only for a single candidate")
-    parser.add_argument("--skip_baseline", action="store_true", help="Skip running baseline tests (ex. that check that basic content is present on each page)")
+    parser.add_argument(
+        "--candidate",
+        type=str,
+        default=None,
+        help="Run test only for a single candidate",
+    )
+    parser.add_argument(
+        "--skip_baseline",
+        action="store_true",
+        help="Skip running baseline tests (ex. that check that basic content is present on each page)",
+    )
     parser.add_argument(
         "--bootstrap_samples",
         type=int,
@@ -186,10 +246,23 @@ def main():
         help="Confidence level for interval calculation (default: 0.95 for 95% CI).",
     )
     # New arguments
-    parser.add_argument("--sample", type=int, default=None, help="Randomly sample N tests to run instead of all tests.")
-    parser.add_argument("--test_report", type=str, default=None, help="Generate an HTML report of test results. Provide a filename (e.g., results.html).")
     parser.add_argument(
-        "--output_failed", type=str, default=None, help="Output a JSONL file containing tests that failed across all candidates. Provide a filename."
+        "--sample",
+        type=int,
+        default=None,
+        help="Randomly sample N tests to run instead of all tests.",
+    )
+    parser.add_argument(
+        "--test_report",
+        type=str,
+        default=None,
+        help="Generate an HTML report of test results. Provide a filename (e.g., results.html).",
+    )
+    parser.add_argument(
+        "--output_failed",
+        type=str,
+        default=None,
+        help="Output a JSONL file containing tests that failed across all candidates. Provide a filename.",
     )
     args = parser.parse_args()
 
@@ -202,7 +275,9 @@ def main():
         print("Error: /pdfs folder must exist in your data directory.", file=sys.stderr)
         sys.exit(1)
 
-    all_pdf_files = list(glob.glob(os.path.join(pdf_folder, "**/*.pdf"), recursive=True))
+    all_pdf_files = list(
+        glob.glob(os.path.join(pdf_folder, "**/*.pdf"), recursive=True)
+    )
 
     if not all_pdf_files:
         print(f"Error: No PDF files found in {pdf_folder}", file=sys.stderr)
@@ -234,13 +309,20 @@ def main():
 
     for pdf in pdf_basenames:
         if not any(t.type == "baseline" for t in all_tests if t.pdf == pdf):
-            all_tests.append(BaselineTest(id=f"{pdf}_baseline", pdf=pdf, page=1, type="baseline"))
+            all_tests.append(
+                BaselineTest(id=f"{pdf}_baseline", pdf=pdf, page=1, type="baseline")
+            )
             test_to_jsonl[all_tests[-1].id] = "baseline"
 
     for pdf in pdf_basenames:
         pdf_doc = PdfReader(os.path.join(pdf_folder, pdf))
         for page in range(1, len(pdf_doc.pages) + 1):
-            if not any(test for test in all_tests if test.pdf == pdf and test.page == page) and not args.force:
+            if (
+                not any(
+                    test for test in all_tests if test.pdf == pdf and test.page == page
+                )
+                and not args.force
+            ):
                 print(f"No dataset entry found for pdf {pdf} page {page}")
                 sys.exit(1)
 
@@ -250,9 +332,13 @@ def main():
     # Sample tests if requested
     if args.sample is not None and args.sample > 0:
         if args.sample >= len(all_tests):
-            print(f"Sample size {args.sample} is greater than or equal to the total number of tests ({len(all_tests)}). Using all tests.")
+            print(
+                f"Sample size {args.sample} is greater than or equal to the total number of tests ({len(all_tests)}). Using all tests."
+            )
         else:
-            print(f"Randomly sampling {args.sample} tests out of {len(all_tests)} total tests.")
+            print(
+                f"Randomly sampling {args.sample} tests out of {len(all_tests)} total tests."
+            )
             all_tests = random.sample(all_tests, args.sample)
 
     candidate_folders = []
@@ -266,7 +352,10 @@ def main():
                 candidate_folders.append(full_path)
 
     if not candidate_folders:
-        print("Error: No candidate pipeline folders found (subdirectories besides 'pdfs').", file=sys.stderr)
+        print(
+            "Error: No candidate pipeline folders found (subdirectories besides 'pdfs').",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     candidate_folders.sort()
@@ -278,9 +367,15 @@ def main():
     for candidate in candidate_folders:
         candidate_name = os.path.basename(candidate)
         print(f"\nEvaluating candidate: {candidate_name}")
-        overall_score, total_tests, candidate_errors, test_failures, test_type_breakdown, all_test_scores, test_results = evaluate_candidate(
-            candidate, all_tests, pdf_basenames, args.force
-        )
+        (
+            overall_score,
+            total_tests,
+            candidate_errors,
+            test_failures,
+            test_type_breakdown,
+            all_test_scores,
+            test_results,
+        ) = evaluate_candidate(candidate, all_tests, pdf_basenames, args.force)
 
         # Always store test results for displaying jsonl file groupings
         test_results_by_candidate[candidate_name] = test_results
@@ -321,10 +416,26 @@ def main():
 
         # Calculate CI using the updated function with splits
         if jsonl_scores:
-            ci = calculate_bootstrap_ci(jsonl_scores, n_bootstrap=n_bootstrap, ci_level=ci_level, splits=jsonl_file_sizes)
+            ci = calculate_bootstrap_ci(
+                jsonl_scores,
+                n_bootstrap=n_bootstrap,
+                ci_level=ci_level,
+                splits=jsonl_file_sizes,
+            )
         else:
             ci = (0.0, 0.0)
-        summary.append((candidate_name, overall_score, total_tests, candidate_errors, test_failures, test_type_breakdown, ci, all_test_scores))
+        summary.append(
+            (
+                candidate_name,
+                overall_score,
+                total_tests,
+                candidate_errors,
+                test_failures,
+                test_type_breakdown,
+                ci,
+                all_test_scores,
+            )
+        )
         print(f"\nCandidate: {candidate_name}")
         if candidate_errors:
             for err in candidate_errors:
@@ -340,12 +451,27 @@ def main():
                     pass_rate = results["passed"] / results["total"]
                     jsonl_pass_rates.append(pass_rate)
 
-            per_category_score = sum(jsonl_pass_rates) / len(jsonl_pass_rates) if jsonl_pass_rates else 0.0
-            print(f"  Average Score: {per_category_score * 100:.1f}% (95% CI: [{ci[0] * 100:.1f}%, {ci[1] * 100:.1f}%]) over {total_tests} tests.")
+            per_category_score = (
+                sum(jsonl_pass_rates) / len(jsonl_pass_rates)
+                if jsonl_pass_rates
+                else 0.0
+            )
+            print(
+                f"  Average Score: {per_category_score * 100:.1f}% (95% CI: [{ci[0] * 100:.1f}%, {ci[1] * 100:.1f}%]) over {total_tests} tests."
+            )
 
     print("\n" + "=" * 60)
     print("Final Summary with 95% Confidence Intervals:")
-    for idx, (candidate_name, _, total_tests, candidate_errors, _, test_type_breakdown, ci, _) in enumerate(summary):
+    for idx, (
+        candidate_name,
+        _,
+        total_tests,
+        candidate_errors,
+        _,
+        test_type_breakdown,
+        ci,
+        _,
+    ) in enumerate(summary):
         # Group results by jsonl file
         jsonl_results = {}
         for test in all_tests:
@@ -362,8 +488,14 @@ def main():
             if not candidate_errors and hasattr(test, "pdf") and hasattr(test, "page"):
                 pdf_name = test.pdf
                 page = test.page
-                if pdf_name in test_results_by_candidate.get(candidate_name, {}) and page in test_results_by_candidate[candidate_name].get(pdf_name, {}):
-                    for t, passed, _ in test_results_by_candidate[candidate_name][pdf_name][page]:
+                if pdf_name in test_results_by_candidate.get(
+                    candidate_name, {}
+                ) and page in test_results_by_candidate[candidate_name].get(
+                    pdf_name, {}
+                ):
+                    for t, passed, _ in test_results_by_candidate[candidate_name][
+                        pdf_name
+                    ][page]:
                         if t.id == test.id:
                             test_result = passed
                             break
@@ -379,10 +511,21 @@ def main():
                 jsonl_pass_rates.append(pass_rate)
 
         # New overall score is average of per-JSONL pass rates
-        new_overall_score = sum(jsonl_pass_rates) / len(jsonl_pass_rates) if jsonl_pass_rates else 0.0
+        new_overall_score = (
+            sum(jsonl_pass_rates) / len(jsonl_pass_rates) if jsonl_pass_rates else 0.0
+        )
 
         # Update the overall_score in the summary list for later use (e.g., in permutation tests)
-        summary[idx] = (candidate_name, new_overall_score, total_tests, candidate_errors, summary[idx][4], test_type_breakdown, ci, summary[idx][7])
+        summary[idx] = (
+            candidate_name,
+            new_overall_score,
+            total_tests,
+            candidate_errors,
+            summary[idx][4],
+            test_type_breakdown,
+            ci,
+            summary[idx][7],
+        )
 
         if candidate_errors:
             status = "FAILED (errors)"
@@ -392,19 +535,25 @@ def main():
             # Use the CI that was calculated with proper category-based bootstrap
             half_width = ((ci[1] - ci[0]) / 2) * 100
             ciw_str = f"± {half_width:0.1f}%"
-        print(f"{candidate_name:20s} : Average Score: {status} {ciw_str} (average of per-JSONL scores)")
+        print(
+            f"{candidate_name:20s} : Average Score: {status} {ciw_str} (average of per-JSONL scores)"
+        )
 
         # Sort the test types alphabetically
         for ttype in sorted(test_type_breakdown.keys()):
             scores = test_type_breakdown[ttype]
             avg = sum(scores) / len(scores) * 100 if scores else 0.0
-            print(f"    {ttype:8s}: {avg:0.1f}% average pass rate over {len(scores)} tests")
+            print(
+                f"    {ttype:8s}: {avg:0.1f}% average pass rate over {len(scores)} tests"
+            )
 
         print("\n    Results by JSONL file:")
         for jsonl_file, results in sorted(jsonl_results.items()):
             if results["total"] > 0:
                 pass_rate = (results["passed"] / results["total"]) * 100
-                print(f"        {jsonl_file:30s}: {pass_rate:0.1f}% ({results['passed']}/{results['total']} tests)")
+                print(
+                    f"        {jsonl_file:30s}: {pass_rate:0.1f}% ({results['passed']}/{results['total']} tests)"
+                )
         print("")
 
     # Generate HTML report if requested
@@ -415,7 +564,9 @@ def main():
     if args.output_failed:
         # Identify tests that failed across all candidates
         all_failed_tests = []
-        valid_candidates = [c for c in summary if not c[3]]  # Skip candidates with errors
+        valid_candidates = [
+            c for c in summary if not c[3]
+        ]  # Skip candidates with errors
 
         for test in all_tests:
             # Track whether this test has any results
@@ -428,8 +579,14 @@ def main():
                 if hasattr(test, "pdf") and hasattr(test, "page"):
                     pdf_name = test.pdf
                     page = test.page
-                    if pdf_name in test_results_by_candidate.get(candidate_name, {}) and page in test_results_by_candidate[candidate_name].get(pdf_name, {}):
-                        for t, passed, explanation in test_results_by_candidate[candidate_name][pdf_name][page]:
+                    if pdf_name in test_results_by_candidate.get(
+                        candidate_name, {}
+                    ) and page in test_results_by_candidate[candidate_name].get(
+                        pdf_name, {}
+                    ):
+                        for t, passed, explanation in test_results_by_candidate[
+                            candidate_name
+                        ][pdf_name][page]:
                             if t.id == test.id:
                                 has_results = True
                                 test_result = passed
@@ -443,12 +600,18 @@ def main():
                 all_failed_tests.append(test)
 
         # If we have any failed tests, write them to the specified JSONL file
-        output_path = os.path.join(input_folder, args.output_failed) if not os.path.isabs(args.output_failed) else args.output_failed
+        output_path = (
+            os.path.join(input_folder, args.output_failed)
+            if not os.path.isabs(args.output_failed)
+            else args.output_failed
+        )
 
         if all_failed_tests:
             save_tests(all_failed_tests, output_path)
 
-            print(f"\nOutput {len(all_failed_tests)} tests that failed across all candidates to {output_path}")
+            print(
+                f"\nOutput {len(all_failed_tests)} tests that failed across all candidates to {output_path}"
+            )
         else:
             print("\nNo tests failed across all candidates. No output file created.")
 
