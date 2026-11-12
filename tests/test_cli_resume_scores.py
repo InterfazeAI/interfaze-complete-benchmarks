@@ -67,12 +67,20 @@ def test_resumed_gpqa_scores_each_question_once(tmp_path, monkeypatch, failures)
     cli.cmd_run(args)  # Same question succeeds after resuming.
 
     result_dir = tmp_path / "results" / "gpqa" / "fake"
+    with (result_dir / "responses.jsonl").open("a", encoding="utf-8") as log:
+        log.write(
+            json.dumps({"id": "question-1", "response": None, "error": "late"}) + "\n"
+        )
+        log.write(json.dumps({"response": None, "error": "missing id"}) + "\n")
+
+    # A completed question must not be retried and its successful result must still score.
+    cli.cmd_run(args)
     records = [
         json.loads(line)
         for line in (result_dir / "responses.jsonl").read_text().splitlines()
     ]
     metrics = json.loads((result_dir / "metrics.json").read_text())
-    assert len(records) == failures + 1  # Preserve every attempt on disk.
+    assert len(records) == failures + 3  # Preserve every attempt on disk.
     assert metrics["total"] == 1
     assert metrics["accuracy"] == 1.0
     assert metrics["unparseable"] == 0

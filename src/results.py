@@ -55,11 +55,23 @@ class RunStore:
         return out
 
     def completed_ids(self, id_key: str, done: Callable[[dict], bool]) -> set:
-        return {r[id_key] for r in self.latest_responses(id_key) if done(r)}
+        return {r[id_key] for r in self.load_responses() if done(r)}
 
     def latest_responses(self, id_key: str) -> list[dict]:
-        """Return the latest attempt for each sample, keeping the raw log intact."""
-        return list({r[id_key]: r for r in self.load_responses()}.values())
+        """Prefer the latest successful response, keeping the raw log intact."""
+        selected = {}
+        for record in self.load_responses():
+            successful = record.get("response") is not None
+            if not successful and id_key not in record:
+                continue
+            sample_id = record[id_key]
+            if (
+                successful
+                or sample_id not in selected
+                or selected[sample_id].get("response") is None
+            ):
+                selected[sample_id] = record
+        return list(selected.values())
 
     def write_metrics(self, metrics: dict) -> None:
         self._ensure_dir()
