@@ -95,7 +95,7 @@ def cmd_run(args) -> None:
         )
     )
 
-    responses = store.load_responses()
+    responses = store.latest_responses(bench.ID_KEY)
     hosts = dict(Counter(r["host"] for r in responses if r.get("host")))
 
     accepted = inspect.signature(bench.score).parameters
