@@ -44,6 +44,48 @@ def test_completed_ids_uses_done_predicate(tmp_path):
     assert done == {"a"}
 
 
+def test_latest_success_drives_completion_without_discarding_history(tmp_path):
+    store = RunStore("spider2", "m", root=tmp_path)
+    records = [
+        {"instance_id": "a", "response": None},
+        {"instance_id": "b", "response": "old"},
+        {"instance_id": "a", "response": "new"},
+        {"instance_id": "b", "response": None},
+    ]
+    for record in records:
+        store.append_response(record)
+    assert store.load_responses() == records
+    assert store.latest_responses("instance_id") == [records[2], records[1]]
+    assert store.completed_ids(
+        "instance_id", lambda r: r.get("response") is not None
+    ) == {"a", "b"}
+
+
+def test_failed_attempt_without_id_does_not_break_resume_or_scoring(tmp_path):
+    store = RunStore("gpqa", "m", root=tmp_path)
+    records = [
+        {"response": None, "error": "timeout"},
+        {"id": "a", "response": None, "error": "timeout"},
+        {"id": "a", "response": "A"},
+        {"id": "a", "response": None, "error": "timeout"},
+        {"id": "b", "response": None, "error": "timeout"},
+        {"id": "b", "response": None, "error": "retry"},
+    ]
+    for record in records:
+        store.append_response(record)
+
+    assert store.completed_ids("id", lambda r: r.get("response") is not None) == {"a"}
+    assert store.latest_responses("id") == [records[2], records[5]]
+    assert store.load_responses() == records
+
+
+def test_latest_success_replaces_previous_success(tmp_path):
+    store = RunStore("gpqa", "m", root=tmp_path)
+    store.append_response({"id": "a", "response": "old"})
+    store.append_response({"id": "a", "response": "new"})
+    assert store.latest_responses("id") == [{"id": "a", "response": "new"}]
+
+
 def test_write_metrics_and_run(tmp_path):
     store = RunStore("gpqa", "inkling", root=tmp_path)
     store.write_metrics({"benchmark": "gpqa", "score": 0.87})
